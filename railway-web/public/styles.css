@@ -2825,22 +2825,23 @@ input[type="number"] {
   color: #fff;
 }
 
-/* Saved/Google row - MATCH WIDTH OF IMAGE GRIDS BELOW */
+/* Saved/Google Layout - Side by Side Columns */
 .saved-google-row {
     display: flex !important;
     gap: 8px !important;
-    margin: 10px 0 8px 0 !important;
+    margin: 10px 0 !important;
     width: 100% !important;
 }
 
+/* Each section is a vertical column */
 .saved-section,
 .google-section {
     flex: 1 !important;
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
-    padding: 6px 8px !important;
-    background: #111 !important;
+    padding: 8px 10px !important;
+    background: #0d0d0d !important;
     border: 1px solid #2a2a2a !important;
     border-radius: 4px !important;
     font-size: 11px !important;
@@ -3988,30 +3989,36 @@ body {
     padding: 8px 10px !important;
 }
 
-/* Image sections container - SIDE BY SIDE using inline-block */
-.saved-images-section {
-    display: inline-block !important;
-    width: calc(50% - 6px) !important;
-    vertical-align: top !important;
-    margin-right: 3px !important;
-    margin-bottom: 8px !important;
+/* Wrapper for each column (label + grid together) */
+.saved-images-section,
+.google-images-section {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
 }
 
-.google-images-section {
+/* Container that places the two columns side by side */
+.saved-google-row + .saved-images-section {
     display: inline-block !important;
-    width: calc(50% - 6px) !important;
+    width: calc(50% - 4px) !important;
     vertical-align: top !important;
-    margin-left: 3px !important;
-    margin-bottom: 8px !important;
+    margin-right: 4px !important;
+}
+
+.saved-google-row + .saved-images-section + .google-images-section {
+    display: inline-block !important;
+    width: calc(50% - 4px) !important;
+    vertical-align: top !important;
+    margin-left: 4px !important;
 }
 
 /* Force parent to allow inline-block layout */
 .form-compact {
-    font-size: 0 !important; /* Remove whitespace between inline-block elements */
+    font-size: 0 !important;
 }
 
 .form-compact > * {
-    font-size: 13px !important; /* Restore font size for children */
+    font-size: 13px !important;
 }
 
 .saved-images-section .image-grid,
