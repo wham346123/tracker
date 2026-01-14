@@ -2825,24 +2825,43 @@ input[type="number"] {
   color: #fff;
 }
 
-/* Saved/Google Row */
+/* Saved/Google row - MATCH WIDTH OF IMAGE GRIDS BELOW */
 .saved-google-row {
-  display: flex;
-  gap: 8px;
-  margin: 8px 0;
+    display: block !important;
+    margin: 10px 0 8px 0 !important;
+    width: 100% !important;
+    overflow: hidden !important;
 }
 
-.saved-section, .google-section {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #888;
+.saved-section,
+.google-section {
+    width: 50% !important;
+    display: inline-block !important;
+    vertical-align: top !important;
+    padding: 6px 8px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #888;
+}
+
+.saved-section {
+    padding-right: 3px !important;
+}
+
+.google-section {
+    padding-left: 3px !important;
+}
+
+.filter-input, .search-input {
+    width: 100%;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid #333;
+    color: #fff;
+    font-size: 11px;
+    border-radius: 3px;
 }
 
 .filter-input, .search-input {
