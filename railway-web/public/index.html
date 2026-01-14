@@ -2235,8 +2235,13 @@
                 
                 for (const txData of createData.transactions) {
                     try {
-                        // Decode base64 transaction
-                        const txBuffer = Buffer.from(txData.transaction, 'base64');
+                        // Decode base64 transaction (BROWSER-COMPATIBLE)
+                        const binaryString = atob(txData.transaction);
+                        const txBuffer = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) {
+                            txBuffer[i] = binaryString.charCodeAt(i);
+                        }
+                        
                         const tx = solanaWeb3.VersionedTransaction.deserialize(txBuffer);
                         
                         // Sign with private key
@@ -2245,8 +2250,14 @@
                         
                         tx.sign([keypair]);
                         
-                        // Encode back to base64
-                        const signedTx = Buffer.from(tx.serialize()).toString('base64');
+                        // Encode back to base64 (BROWSER-COMPATIBLE)
+                        const serialized = tx.serialize();
+                        let binary = '';
+                        for (let i = 0; i < serialized.length; i++) {
+                            binary += String.fromCharCode(serialized[i]);
+                        }
+                        const signedTx = btoa(binary);
+                        
                         signedTransactions.push(signedTx);
                     } catch (signError) {
                         throw new Error(`Signing failed: ${signError.message}`);
