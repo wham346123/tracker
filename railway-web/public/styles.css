@@ -3995,20 +3995,24 @@ body {
 }
 
 /* Make the saved and google sections display side by side */
+.images-container {
+    display: flex !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
 .saved-images-section {
-    width: 50% !important;
-    display: inline-block !important;
-    vertical-align: top !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
     margin-bottom: 0 !important;
-    padding-right: 3px !important;
 }
 
 .google-images-section {
-    width: 50% !important;
-    display: inline-block !important;
-    vertical-align: top !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
     margin-bottom: 0 !important;
-    padding-left: 3px !important;
 }
 
 .saved-images-section .image-grid,
