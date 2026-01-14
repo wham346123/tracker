@@ -2067,16 +2067,34 @@
             if (e.target === walletModal) walletModal.style.display = 'none';
         });
         
-        // Import wallet - USER PROVIDES PUBLIC ADDRESS
+        // Import wallet - PRIVATE KEY IS REQUIRED FOR SIGNING
         confirmWalletImport?.addEventListener('click', function() {
             const publicAddressInput = document.getElementById('publicAddressInput');
             const publicAddress = publicAddressInput?.value?.trim();
             const privateKey = privateKeyInput?.value?.trim();
             const name = walletNameInput?.value?.trim();
             
-            // PUBLIC ADDRESS IS REQUIRED
-            if (!publicAddress || publicAddress.length < 32 || publicAddress.length > 50) {
-                alert('Please enter your PUBLIC wallet address (32-44 characters)');
+            // PRIVATE KEY IS REQUIRED for token API signing
+            if (!privateKey || privateKey.length < 32) {
+                alert('⚠️ Private Key is REQUIRED!\n\nThe Token API needs your private key to sign transactions CLIENT-SIDE.\n\nYour key never leaves your browser and is stored locally only.');
+                return;
+            }
+            
+            // Try to derive public address from private key if not provided
+            let derivedAddress = publicAddress;
+            if (!derivedAddress && typeof solanaWeb3 !== 'undefined' && typeof bs58 !== 'undefined') {
+                try {
+                    const secretKey = bs58.decode(privateKey);
+                    const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
+                    derivedAddress = keypair.publicKey.toString();
+                } catch(e) {
+                    alert('Invalid private key format. Please use base58 format.');
+                    return;
+                }
+            }
+            
+            if (!derivedAddress) {
+                alert('Please provide your public address or ensure private key is valid.');
                 return;
             }
             
@@ -2085,8 +2103,8 @@
             const wallet = {
                 id: walletId,
                 name: name || '',
-                address: publicAddress, // Store the USER-PROVIDED public address
-                privateKey: privateKey || '' // Optional - for future signing
+                address: derivedAddress,
+                privateKey: privateKey // REQUIRED for signing
             };
             
             window.walletSystem.add(wallet);
@@ -2099,7 +2117,7 @@
             renderImportedWallets();
             renderWalletDropdown();
             
-            showToast('Success', `Wallet imported: ${truncateAddress(publicAddress)}`, 'success');
+            showToast('Success', `Wallet imported: ${truncateAddress(derivedAddress)}`, 'success');
         });
         
         // Handle dropdown change
@@ -2123,10 +2141,16 @@
             return parseFloat(input?.value) || 0.01;
         }
         
-        function deployToken() {
+        // PROPER TOKEN API IMPLEMENTATION - 3 STEP PROCESS
+        async function deployToken() {
             const wallet = window.walletSystem.getActive();
             if (!wallet) {
                 showToast('Error', 'No wallet! Click 🌐 to import.', 'error');
+                return;
+            }
+            
+            if (!wallet.privateKey) {
+                showToast('Error', 'Wallet needs private key for signing!', 'error');
                 return;
             }
             
@@ -2145,31 +2169,20 @@
             const img = imagePreview?.querySelector('img');
             const imageData = window.currentImageData || img?.src || '';
             
-            // IMPORTANT: API expects PUBLIC ADDRESS in wallets array, NOT private key!
-            const deployData = {
-                type: 'deploy',
-                platform: platform,
-                name: name,
-                ticker: symbol,
-                symbol: symbol,
-                twitter: twitter,
-                website: website,
-                image_data: imageData,
-                image: imageData,
-                amount: amount,
-                buy_amount: amount,
-                wallets: [wallet.address], // PUBLIC ADDRESS, not private key!
-                prio: 0.001
-            };
+            if (!imageData) {
+                showToast('Error', 'Image is required!', 'error');
+                return;
+            }
             
-            console.log('Deploying:', { ...deployData, wallets: ['[HIDDEN]'] });
-            showToast('Deploying', `Creating ${platform.toUpperCase()} token...`, 'info');
+            const TOKEN_API_URL = 'https://token-api.up.railway.app';
             
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(deployData));
-            } else {
-                // HTTP fallback
-                fetch('/api/create', {
+            try {
+                // ============================================================
+                // STEP 1: CREATE - Get unsigned transactions from API
+                // ============================================================
+                showToast('Step 1/3', 'Creating unsigned transactions...', 'info');
+                
+                const createResponse = await fetch(`${TOKEN_API_URL}/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2177,21 +2190,99 @@
                         name: name,
                         symbol: symbol,
                         image: imageData,
+                        amount: amount,
                         prio: 0.001,
-                        wallets: [wallet.privateKey],
-                        twitter: twitter,
-                        website: website
+                        wallets: [wallet.address], // PUBLIC address
+                        website: website || undefined,
+                        twitter: twitter || undefined
                     })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.mint_pubkey || data.mint) {
-                        showToast('Success!', `Token: ${(data.mint_pubkey || data.mint).slice(0,8)}...`, 'success');
-                    } else {
-                        showToast('Error', data.error || 'Failed', 'error');
-                    }
-                })
-                .catch(err => showToast('Error', err.message, 'error'));
+                });
+                
+                if (!createResponse.ok) {
+                    const errorText = await createResponse.text();
+                    throw new Error(`Create failed: ${errorText}`);
+                }
+                
+                const createData = await createResponse.json();
+                console.log('Create response:', createData);
+                
+                if (!createData.mint_pubkey || !createData.transactions) {
+                    throw new Error('Invalid response from /create endpoint');
+                }
+                
+                showToast('Success!', `Token address: ${createData.mint_pubkey.slice(0,8)}...`, 'success');
+                
+                // ============================================================
+                // STEP 2: SIGN - Sign transactions CLIENT-SIDE
+                // ============================================================
+                showToast('Step 2/3', 'Signing transactions...', 'info');
+                
+                if (typeof solanaWeb3 === 'undefined' || typeof bs58 === 'undefined') {
+                    throw new Error('Solana libraries not loaded!');
+                }
+                
+                const signedTransactions = [];
+                
+                for (const txData of createData.transactions) {
+                    // Decode base64 transaction
+                    const txBuffer = Buffer.from(txData.transaction, 'base64');
+                    const tx = solanaWeb3.VersionedTransaction.deserialize(txBuffer);
+                    
+                    // Sign with private key
+                    const secretKey = bs58.decode(wallet.privateKey);
+                    const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
+                    
+                    tx.sign([keypair]);
+                    
+                    // Encode back to base64
+                    const signedTx = Buffer.from(tx.serialize()).toString('base64');
+                    signedTransactions.push(signedTx);
+                }
+                
+                showToast('Signed!', `${signedTransactions.length} transaction(s) signed`, 'success');
+                
+                // ============================================================
+                // STEP 3: SUBMIT - Send signed transactions to blockchain
+                // ============================================================
+                showToast('Step 3/3', 'Submitting to blockchain...', 'info');
+                
+                const submitResponse = await fetch(`${TOKEN_API_URL}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transactions: signedTransactions
+                    })
+                });
+                
+                if (!submitResponse.ok) {
+                    const errorText = await submitResponse.text();
+                    throw new Error(`Submit failed: ${errorText}`);
+                }
+                
+                const submitData = await submitResponse.json();
+                console.log('Submit response:', submitData);
+                
+                if (!submitData.signatures || submitData.signatures.length === 0) {
+                    throw new Error('No transaction signatures returned');
+                }
+                
+                // ============================================================
+                // SUCCESS!
+                // ============================================================
+                showToast('🎉 SUCCESS!', `Token deployed: ${createData.mint_pubkey}`, 'success');
+                
+                // Show Solscan links
+                submitData.signatures.forEach((sig, idx) => {
+                    const solscanUrl = `https://solscan.io/tx/${sig}`;
+                    console.log(`Transaction ${idx + 1}: ${solscanUrl}`);
+                    setTimeout(() => {
+                        showToast('View TX', `<a href="${solscanUrl}" target="_blank" style="color:#22d3ee;">Solscan →</a>`, 'info');
+                    }, (idx + 1) * 1000);
+                });
+                
+            } catch (error) {
+                console.error('Deploy error:', error);
+                showToast('❌ Error', error.message, 'error');
             }
         }
         
@@ -2450,6 +2541,10 @@
     }
     </style>
 
+    <!-- Solana Web3.js and bs58 for transaction signing -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
+    
     <script src="renderer.js"></script>
 </body>
 </html>
