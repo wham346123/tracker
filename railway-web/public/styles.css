@@ -3988,31 +3988,21 @@ body {
     padding: 8px 10px !important;
 }
 
-/* Image sections container - SIDE BY SIDE */
-.form-compact {
-    display: flex;
-    flex-direction: column;
-}
-
-/* Make the saved and google sections display side by side */
-.images-container {
-    display: flex !important;
-    gap: 8px !important;
-    width: 100% !important;
-}
-
+/* Image sections container - SIDE BY SIDE using inline-block */
 .saved-images-section {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    margin-bottom: 0 !important;
+    display: inline-block !important;
+    width: calc(50% - 4px) !important;
+    vertical-align: top !important;
+    margin-right: 4px !important;
+    margin-bottom: 8px !important;
 }
 
 .google-images-section {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    margin-bottom: 0 !important;
+    display: inline-block !important;
+    width: calc(50% - 4px) !important;
+    vertical-align: top !important;
+    margin-left: 4px !important;
+    margin-bottom: 8px !important;
 }
 
 .saved-images-section .image-grid,
@@ -4021,7 +4011,8 @@ body {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 4px !important;
     padding: 0 !important;
-    margin: 4px 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
 }
 
 .grid-image {
