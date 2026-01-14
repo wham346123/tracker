@@ -1,0 +1,1 @@
+(async function(){console.log("c-inject loaded");const o={type:"shitter-taconfig",data:{config:window.taConfig,pool:window.taConfig.show["pool-address"]}};console.log("sending taConfig message",o),window.postMessage(o,"*")})();

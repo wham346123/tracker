@@ -1,0 +1,1 @@
+console.log("Axiom Pulse Websocket content script loaded.");const e=document.createElement("script");e.type="text/javascript";e.src=chrome.runtime.getURL("contentScripts/axiom/req-inject.js");(document.head||document.documentElement).appendChild(e);

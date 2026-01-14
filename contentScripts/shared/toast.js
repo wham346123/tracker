@@ -1,0 +1,1 @@
+console.log("[shitter.tech] Toast script loaded.");const t=document.createElement("script");t.type="text/javascript";t.src=chrome.runtime.getURL("contentScripts/shared/toast-inject.js");(document.head||document.documentElement).appendChild(t);

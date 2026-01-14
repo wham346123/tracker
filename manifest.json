@@ -1,0 +1,225 @@
+{
+    "manifest_version": 3,
+    "name": "shitter.tech",
+    "version": "1.7",
+    "description": "the tech",
+    "action": {
+        "default_popup": "index.html"
+    },
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "host_permissions": [
+        "https://*.shitter.tech/",
+        "https://*.photon-sol.tinyastro.io/",
+        "https://*.axiom.trade/"
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAncJ10HYdyioJT31QuMM6UfTfizGXFEiBDsQFBZsbUxkC29MckNYCOlFG+v2HyC3grdC+U32EcnkzV2bG5JA5Z1j36+yJNsmKQAHbwt516SLxyprm2pdQAHmV4cJaBM4ItT/smgfg5BfOh4MROzwfDQNvG/n8BFeCfCh5gYgVt7odl1zhswc+hS5mhjkVkwOEuAPgLJKFucOnU2I6L9KkYZMJX+YIvmL/FqwclW26SBELP1NcU5ZOUZ3lJh628U2edzz65/wJ9ztj+YQ6UALEDv92yu2hZK1tslLHYVVTrumjNQklxuCqPLC33kHmPOYTED+Xfpzo1yamCPap2J1ulwIDAQAB",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "shitter@example.com",
+            "strict_min_version": "58.0"
+        }
+    },
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting"
+    ],
+    "icons": {
+        "16": "assets/media/logos/icon-16.png",
+        "32": "assets/media/logos/icon-32.png",
+        "48": "assets/media/logos/icon-48.png",
+        "64": "assets/media/logos/icon-64.png",
+        "128": "assets/media/logos/icon-128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://photon-sol.tinyastro.io/*",
+                "https://*.axiom.trade/*"
+            ],
+            "js": [
+                "contentScripts/shared/toast.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ],
+            "js": [
+                "contentScripts/photon/main.js"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "https://photon-sol.tinyastro.io/en/lp/*"
+            ],
+            "js": [
+                "contentScripts/photon/config.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ],
+            "js": [
+                "contentScripts/photon/styles.js"
+            ],
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://*.axiom.trade/*"
+            ],
+            "js": [
+                "contentScripts/axiom/main.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://*.axiom.trade/*"
+            ],
+            "js": [
+                "contentScripts/axiom/styles.js"
+            ],
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://*.axiom.trade/*"
+            ],
+            "js": [
+                "contentScripts/axiom/pulse-ws.js"
+            ],
+            "run_at": "document_start"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/media/*",
+                "assets/media/sound_effects/*"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*",
+                "https://*.axiom.trade/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/photon/p-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/photon/c-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/photon/txid-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/photon/w-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/shared/toast-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*",
+                "https://*.axiom.trade/*"
+            ]
+        },
+        {
+            "resources": [
+                "dynamic-styles/photon/blacklist_overlay.css",
+                "dynamic-styles/photon/quick_buy.css",
+                "dynamic-styles/photon/quick_swap.css",
+                "dynamic-styles/photon/social_icons.css",
+                "dynamic-styles/photon/sol_price.css",
+                "dynamic-styles/photon/dexscreener_banner.css",
+                "dynamic-styles/photon/token_card.css",
+                "dynamic-styles/photon/pnl_tracker.css",
+                "dynamic-styles/photon/watchlist_buy_button.css",
+                "dynamic-styles/shared/quick_buy_presets.css",
+                "dynamic-styles/shared/shittertoggle.css",
+                "dynamic-styles/shared/autobuy_input.css"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "dynamic-styles/axiom/quick_swap.css",
+                "dynamic-styles/axiom/quick_buy.css",
+                "dynamic-styles/axiom/social_icons.css",
+                "dynamic-styles/shared/quick_buy_presets.css",
+                "dynamic-styles/shared/shittertoggle.css",
+                "dynamic-styles/shared/autobuy_input.css"
+            ],
+            "matches": [
+                "https://*.axiom.trade/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/photon/pl-inject.js"
+            ],
+            "matches": [
+                "https://photon-sol.tinyastro.io/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/axiom/req-inject.js"
+            ],
+            "matches": [
+                "https://*.axiom.trade/*"
+            ]
+        },
+        {
+            "resources": [
+                "contentScripts/axiom/s-inject.js"
+            ],
+            "matches": [
+                "https://*.axiom.trade/*"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "resources": [
+                "changelog.html",
+                "changelog.json"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
+}
