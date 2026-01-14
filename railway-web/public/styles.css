@@ -3991,18 +3991,27 @@ body {
 /* Image sections container - SIDE BY SIDE using inline-block */
 .saved-images-section {
     display: inline-block !important;
-    width: calc(50% - 4px) !important;
+    width: calc(50% - 6px) !important;
     vertical-align: top !important;
-    margin-right: 4px !important;
+    margin-right: 3px !important;
     margin-bottom: 8px !important;
 }
 
 .google-images-section {
     display: inline-block !important;
-    width: calc(50% - 4px) !important;
+    width: calc(50% - 6px) !important;
     vertical-align: top !important;
-    margin-left: 4px !important;
+    margin-left: 3px !important;
     margin-bottom: 8px !important;
+}
+
+/* Force parent to allow inline-block layout */
+.form-compact {
+    font-size: 0 !important; /* Remove whitespace between inline-block elements */
+}
+
+.form-compact > * {
+    font-size: 13px !important; /* Restore font size for children */
 }
 
 .saved-images-section .image-grid,
