@@ -2543,10 +2543,12 @@
         display: none !important;
     }
     
-    /* Split image grids */
+    /* Split image grids - FIT WITHOUT SCROLLBAR */
     .saved-images-section,
     .google-images-section {
         margin-bottom: 12px;
+        width: 100%;
+        overflow-x: hidden;
     }
     
     .saved-images-section .image-grid,
@@ -2554,6 +2556,22 @@
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 8px;
+        width: 100%;
+        overflow-x: hidden;
+    }
+    
+    .grid-image {
+        aspect-ratio: 1 / 1;
+        width: 100%;
+        height: auto;
+        min-width: 0;
+        overflow: hidden;
+    }
+    
+    .grid-image.placeholder {
+        background: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
     }
     
     /* Wallet Import Modal Styles */
