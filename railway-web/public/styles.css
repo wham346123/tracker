@@ -3976,17 +3976,34 @@ body {
     padding: 8px 10px !important;
 }
 
-/* Image grids with visible placeholders */
-.saved-images-section,
+/* Image sections container - SIDE BY SIDE */
+.form-compact {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Make the saved and google sections display side by side */
+.saved-images-section {
+    width: 50% !important;
+    display: inline-block !important;
+    vertical-align: top !important;
+    margin-bottom: 0 !important;
+    padding-right: 3px !important;
+}
+
 .google-images-section {
-    margin-bottom: 10px !important;
+    width: 50% !important;
+    display: inline-block !important;
+    vertical-align: top !important;
+    margin-bottom: 0 !important;
+    padding-left: 3px !important;
 }
 
 .saved-images-section .image-grid,
 .google-images-section .image-grid {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 6px !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 4px !important;
     padding: 0 !important;
     margin: 0 !important;
 }
