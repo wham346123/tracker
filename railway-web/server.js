@@ -271,6 +271,7 @@ async function handleDeploy(ws, data) {
       symbol: data.ticker || data.symbol || 'TOKEN',
       image: data.image_data || data.image || '',
       prio: data.prio || 0.001, // MEV protection tip (max 0.5 SOL)
+      amount: data.amount || data.buy_amount || 0.01, // REQUIRED: Buy amount in SOL (or USD1 for usd1 platform)
       wallets: data.wallets || []
     };
     
