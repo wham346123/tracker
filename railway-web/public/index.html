@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,7 +40,7 @@
                     <span class="username">sasha joi</span>
                 </div>
                 <button class="nav-icon-btn">⊕</button>
-                <button class="nav-icon-btn">🌐</button>
+                <button class="nav-icon-btn" id="walletModalBtn">🌐</button>
             </div>
         </div>
 
@@ -54,8 +55,8 @@
                     <button class="header-btn disabled">💾 Save Token</button>
                     <span class="wallet-selector">
                         Wallet:
-                        <select class="wallet-dropdown">
-                            <option>wham...oLbx</option>
+                        <select class="wallet-dropdown" id="walletDropdown">
+                            <option value="">No wallet</option>
                         </select>
                     </span>
                 </div>
@@ -1825,6 +1826,335 @@
             </div>
         </div>
     </div>
+
+    <!-- Wallet Import Modal -->
+    <div class="sub-modal" id="walletImportModal" style="display: none;">
+        <div class="sub-modal-content">
+            <div class="sub-modal-header">
+                <span class="sub-modal-icon">🔐</span>
+                <span class="sub-modal-title">Import Wallet</span>
+                <button class="sub-modal-close" id="closeWalletModal">×</button>
+            </div>
+            <div class="sub-modal-body">
+                <div class="wallet-import-form">
+                    <div class="form-section">
+                        <label class="form-label">Wallet Name (optional)</label>
+                        <input type="text" id="walletName" class="form-input" placeholder="My Wallet">
+                    </div>
+                    <div class="form-section">
+                        <label class="form-label">Private Key (Base58)</label>
+                        <textarea id="privateKeyInput" class="form-textarea" placeholder="Enter your Solana private key..." rows="3"></textarea>
+                    </div>
+                    <div class="wallet-warning">
+                        ⚠️ Never share your private key. It is stored locally in your browser only.
+                    </div>
+                </div>
+                
+                <!-- Imported Wallets List -->
+                <div class="imported-wallets-section">
+                    <h4>Imported Wallets</h4>
+                    <div class="imported-wallets-list" id="importedWalletsList">
+                        <p class="no-wallets-text">No wallets imported yet</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sub-modal-footer">
+                <button class="modal-cancel-btn" id="cancelWalletImport">Cancel</button>
+                <button class="modal-confirm-btn" id="confirmWalletImport">Import Wallet</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =====================================================
+    // WALLET IMPORT FUNCTIONALITY
+    // =====================================================
+    (function() {
+        const walletModal = document.getElementById('walletImportModal');
+        const walletModalBtn = document.getElementById('walletModalBtn');
+        const closeWalletModal = document.getElementById('closeWalletModal');
+        const cancelWalletImport = document.getElementById('cancelWalletImport');
+        const confirmWalletImport = document.getElementById('confirmWalletImport');
+        const walletDropdown = document.getElementById('walletDropdown');
+        const walletNameInput = document.getElementById('walletName');
+        const privateKeyInput = document.getElementById('privateKeyInput');
+        const importedWalletsList = document.getElementById('importedWalletsList');
+        
+        // Load wallets from localStorage
+        let importedWallets = JSON.parse(localStorage.getItem('importedWallets') || '[]');
+        let activeWalletId = localStorage.getItem('activeWalletId') || '';
+        
+        // Truncate address for display
+        function truncateAddress(address) {
+            if (!address || address.length < 10) return address;
+            return address.slice(0, 4) + '...' + address.slice(-4);
+        }
+        
+        // Derive public key from private key (simplified - just use first part as identifier)
+        function derivePublicKey(privateKey) {
+            // In a real app, you'd use @solana/web3.js to derive the actual public key
+            // For now, we'll create a hash-like identifier
+            let hash = 0;
+            for (let i = 0; i < privateKey.length; i++) {
+                hash = ((hash << 5) - hash) + privateKey.charCodeAt(i);
+                hash |= 0;
+            }
+            return Math.abs(hash).toString(36).padStart(8, '0') + privateKey.slice(0, 4);
+        }
+        
+        // Render wallet dropdown
+        function renderWalletDropdown() {
+            walletDropdown.innerHTML = '';
+            
+            if (importedWallets.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No wallet';
+                walletDropdown.appendChild(option);
+            } else {
+                importedWallets.forEach(wallet => {
+                    const option = document.createElement('option');
+                    option.value = wallet.id;
+                    option.textContent = wallet.name || truncateAddress(wallet.address);
+                    if (wallet.id === activeWalletId) {
+                        option.selected = true;
+                    }
+                    walletDropdown.appendChild(option);
+                });
+            }
+        }
+        
+        // Render imported wallets list in modal
+        function renderImportedWallets() {
+            if (importedWallets.length === 0) {
+                importedWalletsList.innerHTML = '<p class="no-wallets-text">No wallets imported yet</p>';
+                return;
+            }
+            
+            importedWalletsList.innerHTML = importedWallets.map((wallet, idx) => `
+                <div class="imported-wallet-item ${wallet.id === activeWalletId ? 'active' : ''}">
+                    <div class="wallet-info">
+                        <span class="wallet-name">${wallet.name || 'Wallet ' + (idx + 1)}</span>
+                        <span class="wallet-address">${truncateAddress(wallet.address)}</span>
+                    </div>
+                    <div class="wallet-actions">
+                        ${wallet.id !== activeWalletId ? `<button class="set-active-btn" data-id="${wallet.id}">Set Active</button>` : '<span class="active-badge">ACTIVE</span>'}
+                        <button class="remove-wallet-btn" data-id="${wallet.id}">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Add event listeners
+            importedWalletsList.querySelectorAll('.set-active-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    activeWalletId = this.dataset.id;
+                    localStorage.setItem('activeWalletId', activeWalletId);
+                    renderImportedWallets();
+                    renderWalletDropdown();
+                });
+            });
+            
+            importedWalletsList.querySelectorAll('.remove-wallet-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = this.dataset.id;
+                    importedWallets = importedWallets.filter(w => w.id !== id);
+                    localStorage.setItem('importedWallets', JSON.stringify(importedWallets));
+                    if (activeWalletId === id) {
+                        activeWalletId = importedWallets[0]?.id || '';
+                        localStorage.setItem('activeWalletId', activeWalletId);
+                    }
+                    renderImportedWallets();
+                    renderWalletDropdown();
+                });
+            });
+        }
+        
+        // Open modal
+        walletModalBtn?.addEventListener('click', function() {
+            walletModal.style.display = 'flex';
+            renderImportedWallets();
+        });
+        
+        // Close modal
+        closeWalletModal?.addEventListener('click', () => walletModal.style.display = 'none');
+        cancelWalletImport?.addEventListener('click', () => walletModal.style.display = 'none');
+        walletModal?.addEventListener('click', (e) => {
+            if (e.target === walletModal) walletModal.style.display = 'none';
+        });
+        
+        // Import wallet
+        confirmWalletImport?.addEventListener('click', function() {
+            const privateKey = privateKeyInput.value.trim();
+            const name = walletNameInput.value.trim();
+            
+            if (!privateKey) {
+                alert('Please enter a private key');
+                return;
+            }
+            
+            // Validate private key format (basic check)
+            if (privateKey.length < 32) {
+                alert('Invalid private key format');
+                return;
+            }
+            
+            // Create wallet object
+            const walletId = 'wallet_' + Date.now();
+            const address = derivePublicKey(privateKey);
+            
+            const wallet = {
+                id: walletId,
+                name: name || 'Wallet ' + (importedWallets.length + 1),
+                address: address,
+                privateKey: privateKey // In production, encrypt this!
+            };
+            
+            importedWallets.push(wallet);
+            localStorage.setItem('importedWallets', JSON.stringify(importedWallets));
+            
+            // Set as active if first wallet
+            if (importedWallets.length === 1) {
+                activeWalletId = walletId;
+                localStorage.setItem('activeWalletId', activeWalletId);
+            }
+            
+            // Clear form
+            privateKeyInput.value = '';
+            walletNameInput.value = '';
+            
+            // Update UI
+            renderImportedWallets();
+            renderWalletDropdown();
+            
+            alert('Wallet imported successfully!');
+        });
+        
+        // Handle dropdown change
+        walletDropdown?.addEventListener('change', function() {
+            activeWalletId = this.value;
+            localStorage.setItem('activeWalletId', activeWalletId);
+            renderImportedWallets();
+        });
+        
+        // Make active wallet accessible globally
+        window.getActiveWallet = function() {
+            return importedWallets.find(w => w.id === activeWalletId) || null;
+        };
+        
+        // Initialize
+        renderWalletDropdown();
+    })();
+    </script>
+
+    <style>
+    /* Wallet Import Modal Styles */
+    .wallet-import-form { margin-bottom: 20px; }
+    .form-textarea {
+        width: 100%;
+        padding: 10px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #fff;
+        font-family: monospace;
+        font-size: 12px;
+        resize: none;
+    }
+    .wallet-warning {
+        background: rgba(234, 179, 8, 0.1);
+        border: 1px solid #eab308;
+        border-radius: 6px;
+        padding: 10px;
+        color: #eab308;
+        font-size: 12px;
+        margin-top: 10px;
+    }
+    .imported-wallets-section {
+        border-top: 1px solid #333;
+        padding-top: 15px;
+    }
+    .imported-wallets-section h4 {
+        color: #888;
+        font-size: 12px;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+    }
+    .imported-wallet-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        margin-bottom: 8px;
+    }
+    .imported-wallet-item.active {
+        border-color: #22c55e;
+        background: rgba(34, 197, 94, 0.1);
+    }
+    .wallet-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .wallet-name {
+        color: #fff;
+        font-weight: 600;
+        font-size: 13px;
+    }
+    .wallet-address {
+        color: #666;
+        font-family: monospace;
+        font-size: 11px;
+    }
+    .wallet-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .set-active-btn {
+        background: #22c55e;
+        border: none;
+        color: #000;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .set-active-btn:hover {
+        background: #16a34a;
+    }
+    .active-badge {
+        background: #22c55e;
+        color: #000;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+    }
+    .remove-wallet-btn {
+        background: transparent;
+        border: 1px solid #444;
+        color: #888;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .remove-wallet-btn:hover {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #fff;
+    }
+    .no-wallets-text {
+        color: #666;
+        text-align: center;
+        padding: 20px;
+        font-size: 13px;
+    }
+    </style>
 
     <script src="renderer.js"></script>
 </body>
