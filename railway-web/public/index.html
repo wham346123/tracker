@@ -2768,22 +2768,42 @@
     // =====================================================
     // TWEET URL PARSER & MOCK TWEET CREATION
     // =====================================================
-    document.addEventListener('DOMContentLoaded', function() {
-        const chatInput = document.getElementById('siteChatInput');
-        const tweetFeed = document.getElementById('twitterFeed');
+    (function() {
+        console.log('Tweet URL parser loaded');
         
-        if (chatInput) {
+        // Wait for DOM to be ready
+        function initTweetParser() {
+            const chatInput = document.getElementById('siteChatInput');
+            const tweetFeed = document.getElementById('twitterFeed');
+            
+            console.log('Chat input found:', !!chatInput);
+            console.log('Tweet feed found:', !!tweetFeed);
+            
+            if (!chatInput || !tweetFeed) {
+                console.error('Required elements not found!');
+                return;
+            }
+            
+            // Add event listener for Enter key
             chatInput.addEventListener('keydown', function(e) {
+                console.log('Key pressed:', e.key, 'Value:', this.value);
+                
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     const url = this.value.trim();
+                    console.log('Processing URL:', url);
                     
                     // Parse tweet URL: https://x.com/username/status/tweetid or https://twitter.com/username/status/tweetid
                     const tweetRegex = /(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status\/(\d+)/i;
                     const match = url.match(tweetRegex);
                     
+                    console.log('Regex match:', match);
+                    
                     if (match) {
                         const username = match[1];
                         const tweetId = match[2];
+                        
+                        console.log('Creating tweet for:', username, tweetId);
                         
                         // Create mock tweet card
                         createMockTweet(username, tweetId, url);
@@ -2792,14 +2812,24 @@
                         this.value = '';
                         
                         // Show confirmation
-                        window.showToast?.('Tweet Added', `@${username} tweet loaded!`, 'success');
+                        if (window.showToast) {
+                            window.showToast('Tweet Added', `@${username} tweet loaded!`, 'success');
+                        }
+                    } else {
+                        console.log('No match found for URL');
                     }
                 }
             });
+            
+            console.log('Event listener attached to chat input');
         }
         
         function createMockTweet(username, tweetId, url) {
-            if (!tweetFeed) return;
+            const tweetFeed = document.getElementById('twitterFeed');
+            if (!tweetFeed) {
+                console.error('Tweet feed not found!');
+                return;
+            }
             
             // Generate mock data
             const now = new Date();
@@ -2811,22 +2841,28 @@
                 minute: '2-digit'
             });
             
-            // Create avatar initials
-            const initials = username.slice(0, 2).toUpperCase();
+            // Format username for display - capitalize properly
+            const displayName = username
+                .split(/[\s_-]/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+            
+            // Create avatar - circular with initials or first 2 letters
+            const avatarText = username.slice(0, 2).toUpperCase();
             
             // Random color for avatar
-            const colors = ['#0ea5e9', '#8b5cf6', '#22c55e', '#f97316', '#ec4899'];
+            const colors = ['#0ea5e9', '#8b5cf6', '#22c55e', '#f97316', '#ec4899', '#3b82f6'];
             const avatarColor = colors[Math.floor(Math.random() * colors.length)];
             
-            // Create tweet card HTML
+            // Create tweet card HTML - EXACT format matching existing tweets
             const tweetCard = document.createElement('div');
             tweetCard.className = 'tweet-card';
             tweetCard.innerHTML = `
                 <div class="tweet-header">
                     <div class="tweet-author">
-                        <div class="author-avatar" style="background: ${avatarColor};">${initials}</div>
+                        <div class="author-avatar" style="background: ${avatarColor}; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff;">${avatarText}</div>
                         <div class="author-info">
-                            <span class="author-name">${formatUsername(username)}</span>
+                            <span class="author-name">${displayName}</span>
                             <span class="author-handle">@${username.toLowerCase()}</span>
                             <span class="tweet-date">${dateStr}</span>
                         </div>
@@ -2834,42 +2870,58 @@
                     </div>
                     <button class="tweet-deploy-btn">⚡ DEPLOY</button>
                 </div>
-                <div class="tweet-action">@${username} posted</div>
+                <div class="tweet-action">@${username.toLowerCase()} posted</div>
                 <div class="tweet-content">
-                    NOW: U.S. Senate votes 51–50 against effort to block Trump from further Venezuela military action without Congress' authorization, Vance breaks the tie.
-                </div>
-                <div class="tweet-media">
-                    <div class="media-placeholder" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 200px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px;">
-                        Mock Tweet Image
-                    </div>
+                    I love how Polymarket was just like "what if we made it really easy to do insider trading" and built a whole company on that
                 </div>
                 <div style="font-size: 10px; color: #555; margin-top: 8px;">
-                    Source: <a href="${url}" target="_blank" style="color: #0ea5e9;">${url}</a>
+                    📎 Source: <a href="${url}" target="_blank" style="color: #0ea5e9; text-decoration: none;">${url}</a>
                 </div>
             `;
+            
+            console.log('Tweet card created, inserting into feed...');
             
             // Insert at TOP of feed (most recent)
             tweetFeed.insertBefore(tweetCard, tweetFeed.firstChild);
             
             // Scroll to show the new tweet
-            tweetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => {
+                tweetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
             
             // Trigger highlighting check after a brief delay
             setTimeout(() => {
                 if (window.checkAndHighlightTweets) {
+                    console.log('Running highlight check...');
                     window.checkAndHighlightTweets();
                 }
-            }, 100);
+                
+                // Also trigger notification if matches custom account
+                if (window.customAccounts && window.playSound) {
+                    const handle = '@' + username.toLowerCase();
+                    const matchedAccount = window.customAccounts.find(acc => 
+                        acc.username.toLowerCase() === handle
+                    );
+                    if (matchedAccount && matchedAccount.soundKey) {
+                        console.log('Playing sound for:', handle);
+                        window.playSound(matchedAccount.soundKey);
+                    }
+                }
+            }, 200);
+            
+            console.log('Tweet added successfully!');
         }
         
-        function formatUsername(username) {
-            // Capitalize first letter of each word
-            return username
-                .split(/[\s_-]/)
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ');
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTweetParser);
+        } else {
+            initTweetParser();
         }
-    });
+        
+        // Also try after a short delay to ensure everything is loaded
+        setTimeout(initTweetParser, 1000);
+    })();
     </script>
     
     <script src="renderer.js"></script>
