@@ -3989,27 +3989,39 @@ body {
     padding: 8px 10px !important;
 }
 
-/* Image sections - full width stacked vertically */
+/* Image sections - side by side with colored borders */
 .saved-images-section,
 .google-images-section {
-    width: 100% !important;
-    margin-bottom: 8px !important;
+    display: inline-block !important;
+    width: calc(50% - 6px) !important;
+    vertical-align: top !important;
 }
 
-/* Saved images - red border box */
+/* Saved images - red border box on left */
 .saved-images-section {
     border: 3px solid #ef4444 !important;
     border-radius: 8px !important;
     padding: 8px !important;
     background: #0d0d0d !important;
+    margin-right: 4px !important;
 }
 
-/* Google images - green border box */
+/* Google images - green border box on right */
 .google-images-section {
     border: 3px solid #22c55e !important;
     border-radius: 8px !important;
     padding: 8px !important;
     background: #0d0d0d !important;
+    margin-left: 4px !important;
+}
+
+/* Parent container for inline-block layout */
+.form-compact {
+    font-size: 0 !important;
+}
+
+.form-compact > * {
+    font-size: 13px !important;
 }
 
 .saved-images-section .image-grid,
