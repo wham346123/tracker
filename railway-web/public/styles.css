@@ -3965,13 +3965,13 @@ body {
 
 /* Saved/Google sections with colored left borders */
 .saved-section {
-    border-left: 3px solid #fbbf24 !important;
+    border-left: 3px solid #ef4444 !important;
     background: #0d0d0d !important;
     padding: 8px 10px !important;
 }
 
 .google-section {
-    border-left: 3px solid #3b82f6 !important;
+    border-left: 3px solid #22c55e !important;
     background: #0d0d0d !important;
     padding: 8px 10px !important;
 }
