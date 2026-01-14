@@ -4021,7 +4021,7 @@ body {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 4px !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 4px 0 !important;
 }
 
 .grid-image {
