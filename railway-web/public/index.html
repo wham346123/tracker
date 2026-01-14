@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1867,7 +1866,7 @@
 
     <script>
     // =====================================================
-    // WALLET IMPORT FUNCTIONALITY
+    // WALLET IMPORT & DEPLOY FUNCTIONALITY
     // =====================================================
     (function() {
         const walletModal = document.getElementById('walletImportModal');
@@ -1884,16 +1883,55 @@
         let importedWallets = JSON.parse(localStorage.getItem('importedWallets') || '[]');
         let activeWalletId = localStorage.getItem('activeWalletId') || '';
         
+        // WebSocket connection
+        let ws = null;
+        const WS_URL = window.location.protocol === 'https:' 
+            ? `wss://${window.location.host}` 
+            : `ws://${window.location.host}`;
+        
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => console.log('WebSocket connected');
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('WS message:', data);
+                handleWSMessage(data);
+            };
+            ws.onclose = () => setTimeout(connectWebSocket, 3000);
+            ws.onerror = (err) => console.error('WS error:', err);
+        }
+        connectWebSocket();
+        
+        function handleWSMessage(data) {
+            if (data.type === 'status') {
+                showToast('Status', data.message, 'info');
+            } else if (data.type === 'token_create_success') {
+                showToast('Success!', `Token created: ${data.address?.slice(0,8)}...`, 'success');
+            } else if (data.type === 'token_create_error') {
+                showToast('Error', data.message, 'error');
+            }
+        }
+        
+        function showToast(title, message, type) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<strong>${title}</strong><br>${message}`;
+            toast.style.cssText = 'background:#1a1a1a;border:1px solid #333;padding:12px 16px;border-radius:8px;margin-bottom:8px;color:#fff;animation:fadeIn 0.3s;';
+            if (type === 'success') toast.style.borderColor = '#22c55e';
+            if (type === 'error') toast.style.borderColor = '#ef4444';
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+        
         // Truncate address for display
         function truncateAddress(address) {
             if (!address || address.length < 10) return address;
             return address.slice(0, 4) + '...' + address.slice(-4);
         }
         
-        // Derive public key from private key (simplified - just use first part as identifier)
+        // Derive public key from private key
         function derivePublicKey(privateKey) {
-            // In a real app, you'd use @solana/web3.js to derive the actual public key
-            // For now, we'll create a hash-like identifier
             let hash = 0;
             for (let i = 0; i < privateKey.length; i++) {
                 hash = ((hash << 5) - hash) + privateKey.charCodeAt(i);
@@ -1902,7 +1940,7 @@
             return Math.abs(hash).toString(36).padStart(8, '0') + privateKey.slice(0, 4);
         }
         
-        // Render wallet dropdown
+        // Render wallet dropdown - USE ADDRESS AS NAME
         function renderWalletDropdown() {
             walletDropdown.innerHTML = '';
             
@@ -1915,6 +1953,7 @@
                 importedWallets.forEach(wallet => {
                     const option = document.createElement('option');
                     option.value = wallet.id;
+                    // Show custom name if provided, otherwise show truncated address
                     option.textContent = wallet.name || truncateAddress(wallet.address);
                     if (wallet.id === activeWalletId) {
                         option.selected = true;
@@ -1934,7 +1973,7 @@
             importedWalletsList.innerHTML = importedWallets.map((wallet, idx) => `
                 <div class="imported-wallet-item ${wallet.id === activeWalletId ? 'active' : ''}">
                     <div class="wallet-info">
-                        <span class="wallet-name">${wallet.name || 'Wallet ' + (idx + 1)}</span>
+                        <span class="wallet-name">${wallet.name || truncateAddress(wallet.address)}</span>
                         <span class="wallet-address">${truncateAddress(wallet.address)}</span>
                     </div>
                     <div class="wallet-actions">
@@ -1982,7 +2021,7 @@
             if (e.target === walletModal) walletModal.style.display = 'none';
         });
         
-        // Import wallet
+        // Import wallet - DEFAULT NAME TO ADDRESS
         confirmWalletImport?.addEventListener('click', function() {
             const privateKey = privateKeyInput.value.trim();
             const name = walletNameInput.value.trim();
@@ -1992,41 +2031,36 @@
                 return;
             }
             
-            // Validate private key format (basic check)
             if (privateKey.length < 32) {
                 alert('Invalid private key format');
                 return;
             }
             
-            // Create wallet object
             const walletId = 'wallet_' + Date.now();
             const address = derivePublicKey(privateKey);
             
             const wallet = {
                 id: walletId,
-                name: name || 'Wallet ' + (importedWallets.length + 1),
+                name: name || truncateAddress(address), // DEFAULT TO ADDRESS
                 address: address,
-                privateKey: privateKey // In production, encrypt this!
+                privateKey: privateKey
             };
             
             importedWallets.push(wallet);
             localStorage.setItem('importedWallets', JSON.stringify(importedWallets));
             
-            // Set as active if first wallet
             if (importedWallets.length === 1) {
                 activeWalletId = walletId;
                 localStorage.setItem('activeWalletId', activeWalletId);
             }
             
-            // Clear form
             privateKeyInput.value = '';
             walletNameInput.value = '';
             
-            // Update UI
             renderImportedWallets();
             renderWalletDropdown();
             
-            alert('Wallet imported successfully!');
+            showToast('Success', 'Wallet imported!', 'success');
         });
         
         // Handle dropdown change
@@ -2036,10 +2070,138 @@
             renderImportedWallets();
         });
         
-        // Make active wallet accessible globally
+        // Get active wallet
         window.getActiveWallet = function() {
             return importedWallets.find(w => w.id === activeWalletId) || null;
         };
+        
+        // =====================================================
+        // DEPLOY FUNCTIONALITY
+        // =====================================================
+        
+        function getSelectedPlatform() {
+            const active = document.querySelector('.platform-indicator.active');
+            return active ? active.dataset.platform : 'pump';
+        }
+        
+        function getBuyAmount() {
+            const platform = getSelectedPlatform();
+            const input = document.querySelector(`.platform-amount-input[data-platform="${platform}"]`);
+            return parseFloat(input?.value) || 0.01;
+        }
+        
+        function deployToken() {
+            const wallet = window.getActiveWallet();
+            if (!wallet) {
+                showToast('Error', 'No wallet selected! Click 🌐 to import.', 'error');
+                return;
+            }
+            
+            const name = document.getElementById('tokenName')?.value?.trim();
+            const symbol = document.getElementById('tokenSymbol')?.value?.trim();
+            const twitter = document.getElementById('twitter')?.value?.trim();
+            const website = document.getElementById('website')?.value?.trim();
+            const platform = getSelectedPlatform();
+            const amount = getBuyAmount();
+            
+            if (!name) {
+                showToast('Error', 'Please enter a token name', 'error');
+                return;
+            }
+            if (!symbol) {
+                showToast('Error', 'Please enter a token symbol', 'error');
+                return;
+            }
+            
+            // Get image data if available
+            const imagePreview = document.getElementById('imagePreviewDeploy');
+            const img = imagePreview?.querySelector('img');
+            const imageData = img?.src || '';
+            
+            const deployData = {
+                type: 'deploy',
+                platform: platform,
+                name: name,
+                ticker: symbol,
+                twitter: twitter,
+                website: website,
+                image_data: imageData,
+                buy_amount: amount,
+                wallets: [wallet.address],
+                prio: 0.001
+            };
+            
+            console.log('Deploying:', deployData);
+            showToast('Deploying', `Creating ${platform.toUpperCase()} token...`, 'info');
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(deployData));
+            } else {
+                showToast('Error', 'WebSocket not connected. Trying HTTP...', 'error');
+                // Fallback to HTTP
+                fetch('/api/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        platform: platform,
+                        name: name,
+                        symbol: symbol,
+                        image: imageData,
+                        prio: 0.001,
+                        wallets: [wallet.address],
+                        twitter: twitter,
+                        website: website
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.mint_pubkey || data.mint) {
+                        showToast('Success!', `Token: ${(data.mint_pubkey || data.mint).slice(0,8)}...`, 'success');
+                    } else {
+                        showToast('Error', data.error || 'Failed', 'error');
+                    }
+                })
+                .catch(err => showToast('Error', err.message, 'error'));
+            }
+        }
+        
+        // DEPLOY BUTTON - Main deploy button
+        const mainDeployBtn = document.getElementById('mainBtn');
+        mainDeployBtn?.addEventListener('click', deployToken);
+        
+        // Enter key to deploy
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.ctrlKey && !e.altKey) {
+                const activeEl = document.activeElement;
+                if (activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA') {
+                    if (activeEl.id === 'tokenName' || activeEl.id === 'tokenSymbol') {
+                        e.preventDefault();
+                        deployToken();
+                    }
+                }
+            }
+        });
+        
+        // Platform selection
+        document.querySelectorAll('.platform-indicator').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.platform-indicator').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+        
+        // Character counters
+        const nameInput = document.getElementById('tokenName');
+        const symbolInput = document.getElementById('tokenSymbol');
+        const nameCounter = document.getElementById('nameCharCounter');
+        const symbolCounter = document.getElementById('tickerCharCounter');
+        
+        nameInput?.addEventListener('input', () => {
+            nameCounter.textContent = `${nameInput.value.length}/32`;
+        });
+        symbolInput?.addEventListener('input', () => {
+            symbolCounter.textContent = `${symbolInput.value.length}/13`;
+        });
         
         // Initialize
         renderWalletDropdown();
