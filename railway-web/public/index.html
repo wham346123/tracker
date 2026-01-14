@@ -45,8 +45,10 @@
 
         <!-- Main Content Area - 3 Column Layout -->
         <div class="main-content">
-            <!-- Left Panel - CREATE -->
-            <div class="token-deploy-panel">
+            <!-- Left Panel - CREATE (Resizable) -->
+            <div class="token-deploy-panel" id="tokenDeployPanel">
+                <!-- Resize Handle -->
+                <div class="resize-handle" id="resizeHandle"></div>
                 <!-- Token Deploy Header -->
                 <div class="deploy-header">
                     <span class="deploy-title">CREATE</span>
@@ -112,44 +114,38 @@
                         </div>
                     </div>
                     
-                    <!-- Platform Selection with Editable Amounts -->
+                    <!-- Platform Selection - Reordered: PUMP, USD1, BONK, BNB, BAGS, JUPITER -->
                     <div class="platform-section">
                         <div class="platform-icons-row">
                             <div class="platform-item">
-                                <button class="platform-indicator active" data-platform="pump">
+                                <button class="platform-indicator active" data-platform="pump" data-amount="0.001">
                                     <img src="images/pump-logo.png" alt="Pump" class="platform-logo">
                                 </button>
-                                <input type="text" class="platform-amount-input" data-platform="pump" value="9">
                             </div>
                             <div class="platform-item">
-                                <button class="platform-indicator" data-platform="ray">
-                                    <img src="images/raydium-logo.png" alt="Raydium" class="platform-logo">
-                                </button>
-                                <input type="text" class="platform-amount-input" data-platform="ray" value="4">
-                            </div>
-                            <div class="platform-item">
-                                <button class="platform-indicator" data-platform="bags">
-                                    <img src="images/bags-logo.png" alt="Bags" class="platform-logo">
-                                </button>
-                                <input type="text" class="platform-amount-input" data-platform="bags" value="13">
-                            </div>
-                            <div class="platform-item">
-                                <button class="platform-indicator" data-platform="bonk">
-                                    <img src="images/bonk-logo.png" alt="BONK" class="platform-logo">
-                                </button>
-                                <input type="text" class="platform-amount-input" data-platform="bonk" value="7">
-                            </div>
-                            <div class="platform-item">
-                                <button class="platform-indicator" data-platform="usd1">
+                                <button class="platform-indicator" data-platform="usd1" data-amount="4">
                                     <img src="images/usd1-logo.png" alt="USD1" class="platform-logo">
                                 </button>
-                                <input type="text" class="platform-amount-input" data-platform="usd1" value="3.5">
                             </div>
                             <div class="platform-item">
-                                <button class="platform-indicator" data-platform="bnb">
+                                <button class="platform-indicator" data-platform="bonk" data-amount="13">
+                                    <img src="images/bonk-logo.png" alt="BONK" class="platform-logo">
+                                </button>
+                            </div>
+                            <div class="platform-item">
+                                <button class="platform-indicator" data-platform="bnb" data-amount="7">
                                     <img src="images/bnb-logo.png" alt="BNB" class="platform-logo">
                                 </button>
-                                <input type="text" class="platform-amount-input" data-platform="bnb" value="0.5">
+                            </div>
+                            <div class="platform-item">
+                                <button class="platform-indicator" data-platform="bags" data-amount="3.5">
+                                    <img src="images/bags-logo.png" alt="Bags" class="platform-logo">
+                                </button>
+                            </div>
+                            <div class="platform-item">
+                                <button class="platform-indicator" data-platform="jupiter" data-amount="0.5">
+                                    <img src="images/jupiter-logo.png" alt="Jupiter" class="platform-logo">
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -217,14 +213,21 @@
                         </div>
                     </div>
                     
-                    <!-- Image Grid -->
-                    <div class="image-grid">
-                        <div class="grid-image placeholder"><img src="images/pump-logo.png" alt=""></div>
-                        <div class="grid-image placeholder"></div>
-                        <div class="grid-image placeholder"></div>
-                        <div class="grid-image placeholder"></div>
-                        <div class="grid-image placeholder"></div>
-                        <div class="grid-image placeholder"></div>
+                    <!-- Image Grids Split - Saved and Google -->
+                    <div class="saved-images-section">
+                        <div class="image-grid">
+                            <div class="grid-image placeholder"></div>
+                            <div class="grid-image placeholder"></div>
+                            <div class="grid-image placeholder"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="google-images-section">
+                        <div class="image-grid">
+                            <div class="grid-image placeholder"></div>
+                            <div class="grid-image placeholder"></div>
+                            <div class="grid-image placeholder"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2137,8 +2140,60 @@
         
         function getBuyAmount() {
             const platform = getSelectedPlatform();
-            const input = document.querySelector(`.platform-amount-input[data-platform="${platform}"]`);
-            return parseFloat(input?.value) || 0.01;
+            const btn = document.querySelector(`.platform-indicator[data-platform="${platform}"]`);
+            return parseFloat(btn?.dataset.amount) || 0.01;
+        }
+        
+        // =====================================================
+        // RESIZABLE PANEL FUNCTIONALITY
+        // =====================================================
+        const deployPanel = document.getElementById('tokenDeployPanel');
+        const resizeHandle = document.getElementById('resizeHandle');
+        
+        if (resizeHandle && deployPanel) {
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+            
+            resizeHandle.addEventListener('mousedown', function(e) {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = deployPanel.offsetWidth;
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isResizing) return;
+                
+                const delta = e.clientX - startX;
+                const newWidth = startWidth + delta;
+                
+                // Min width: 250px, Max width: 600px
+                if (newWidth >= 250 && newWidth <= 600) {
+                    deployPanel.style.width = newWidth + 'px';
+                    deployPanel.style.flexShrink = '0';
+                    
+                    // Save to localStorage
+                    localStorage.setItem('deployPanelWidth', newWidth);
+                }
+            });
+            
+            document.addEventListener('mouseup', function() {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+            
+            // Load saved width on page load
+            const savedWidth = localStorage.getItem('deployPanelWidth');
+            if (savedWidth) {
+                deployPanel.style.width = savedWidth + 'px';
+                deployPanel.style.flexShrink = '0';
+            }
         }
         
         // PROPER TOKEN API IMPLEMENTATION - 3 STEP PROCESS
@@ -2326,11 +2381,12 @@
             }
         });
         
-        // Platform selection
+        // Platform selection with amount storage
         document.querySelectorAll('.platform-indicator').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.platform-indicator').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
+                console.log('Selected platform:', this.dataset.platform, 'Amount:', this.dataset.amount);
             });
         });
         
@@ -2360,22 +2416,22 @@
         // =====================================================
         // IMAGE DRAG & DROP
         // =====================================================
-        const deployPanel = document.querySelector('.token-deploy-panel');
+        const deployPanelForDrop = document.querySelector('.token-deploy-panel');
         const imagePreviewArea = document.getElementById('imagePreviewDeploy');
         
-        if (deployPanel) {
-            deployPanel.addEventListener('dragover', (e) => {
+        if (deployPanelForDrop) {
+            deployPanelForDrop.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                deployPanel.style.outline = '2px dashed #22c55e';
+                deployPanelForDrop.style.outline = '2px dashed #22c55e';
             });
             
-            deployPanel.addEventListener('dragleave', () => {
-                deployPanel.style.outline = 'none';
+            deployPanelForDrop.addEventListener('dragleave', () => {
+                deployPanelForDrop.style.outline = 'none';
             });
             
-            deployPanel.addEventListener('drop', (e) => {
+            deployPanelForDrop.addEventListener('drop', (e) => {
                 e.preventDefault();
-                deployPanel.style.outline = 'none';
+                deployPanelForDrop.style.outline = 'none';
                 
                 const file = e.dataTransfer.files[0];
                 if (file && file.type.startsWith('image/')) {
@@ -2457,6 +2513,47 @@
     </script>
 
     <style>
+    /* =====================================================
+       RESIZABLE PANEL STYLING
+       ===================================================== */
+    .resize-handle {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: transparent;
+        cursor: ew-resize;
+        z-index: 100;
+        transition: background 0.2s ease;
+    }
+    
+    .resize-handle:hover {
+        background: #22c55e;
+    }
+    
+    .token-deploy-panel {
+        position: relative;
+    }
+    
+    /* Platform section - no inputs */
+    .platform-amount-input {
+        display: none !important;
+    }
+    
+    /* Split image grids */
+    .saved-images-section,
+    .google-images-section {
+        margin-bottom: 12px;
+    }
+    
+    .saved-images-section .image-grid,
+    .google-images-section .image-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    
     /* Wallet Import Modal Styles */
     .wallet-import-form { margin-bottom: 20px; }
     .form-textarea {
