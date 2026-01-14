@@ -2555,17 +2555,78 @@
     }
     </style>
 
-    <!-- Solana Web3.js and bs58 for transaction signing - LOAD BEFORE OTHER SCRIPTS -->
+    <!-- Solana Web3.js for transaction signing - LOAD BEFORE OTHER SCRIPTS -->
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/dist/index.min.js" crossorigin="anonymous"></script>
+    
+    <!-- bs58 library - INLINE VERSION to avoid CDN issues -->
+    <script>
+    // bs58 - Base58 encoding/decoding - Inline minimal version
+    (function(global) {
+        const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        const ALPHABET_MAP = {};
+        for (let i = 0; i < ALPHABET.length; i++) {
+            ALPHABET_MAP[ALPHABET.charAt(i)] = i;
+        }
+        const BASE = 58;
+        
+        function decode(string) {
+            if (string.length === 0) return new Uint8Array(0);
+            let bytes = [0];
+            for (let i = 0; i < string.length; i++) {
+                const c = string[i];
+                if (!(c in ALPHABET_MAP)) throw new Error('Non-base58 character');
+                for (let j = 0; j < bytes.length; j++) bytes[j] *= BASE;
+                bytes[0] += ALPHABET_MAP[c];
+                let carry = 0;
+                for (let j = 0; j < bytes.length; j++) {
+                    bytes[j] += carry;
+                    carry = bytes[j] >> 8;
+                    bytes[j] &= 0xff;
+                }
+                while (carry) {
+                    bytes.push(carry & 0xff);
+                    carry >>= 8;
+                }
+            }
+            for (let i = 0; i < string.length && string[i] === '1'; i++) {
+                bytes.push(0);
+            }
+            return new Uint8Array(bytes.reverse());
+        }
+        
+        function encode(buffer) {
+            if (buffer.length === 0) return '';
+            const digits = [0];
+            for (let i = 0; i < buffer.length; i++) {
+                for (let j = 0; j < digits.length; j++) digits[j] <<= 8;
+                digits[0] += buffer[i];
+                let carry = 0;
+                for (let j = 0; j < digits.length; j++) {
+                    digits[j] += carry;
+                    carry = (digits[j] / BASE) | 0;
+                    digits[j] %= BASE;
+                }
+                while (carry) {
+                    digits.push(carry % BASE);
+                    carry = (carry / BASE) | 0;
+                }
+            }
+            let string = '';
+            for (let i = 0; buffer[i] === 0 && i < buffer.length - 1; i++) string += '1';
+            for (let i = digits.length - 1; i >= 0; i--) string += ALPHABET[digits[i]];
+            return string;
+        }
+        
+        global.bs58 = { decode, encode };
+    })(window);
+    console.log('bs58 loaded inline');
+    </script>
     
     <!-- Wait for libraries to load before running app scripts -->
     <script>
-        // Ensure Solana libraries are available globally
         window.addEventListener('load', function() {
             if (typeof solanaWeb3 === 'undefined') {
                 console.error('Solana Web3.js failed to load!');
-                window.solanaWeb3 = window.solanaWeb3 || {};
             }
             if (typeof bs58 === 'undefined') {
                 console.error('bs58 failed to load!');
