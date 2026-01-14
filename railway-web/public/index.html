@@ -2521,15 +2521,17 @@
         right: 0;
         top: 0;
         bottom: 0;
-        width: 4px;
-        background: transparent;
+        width: 8px;
+        background: rgba(34, 197, 94, 0.2);
         cursor: ew-resize;
         z-index: 100;
         transition: background 0.2s ease;
+        border-right: 2px solid #22c55e;
     }
     
     .resize-handle:hover {
-        background: #22c55e;
+        background: rgba(34, 197, 94, 0.5);
+        border-right: 3px solid #22c55e;
     }
     
     .token-deploy-panel {
