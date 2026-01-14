@@ -3960,7 +3960,66 @@ body {
 }
 
 .saved-google-row {
-    margin: 6px 0 !important;
+    margin: 10px 0 8px 0 !important;
+}
+
+/* Saved/Google sections with colored left borders */
+.saved-section {
+    border-left: 3px solid #fbbf24 !important;
+    background: #0d0d0d !important;
+    padding: 8px 10px !important;
+}
+
+.google-section {
+    border-left: 3px solid #3b82f6 !important;
+    background: #0d0d0d !important;
+    padding: 8px 10px !important;
+}
+
+/* Image grids with visible placeholders */
+.saved-images-section,
+.google-images-section {
+    margin-bottom: 10px !important;
+}
+
+.saved-images-section .image-grid,
+.google-images-section .image-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.grid-image {
+    aspect-ratio: 1 !important;
+    background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%) !important;
+    border: 1px solid #1a1a1a !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+}
+
+.grid-image:hover {
+    border-color: #22c55e !important;
+    transform: scale(1.02) !important;
+}
+
+.grid-image.placeholder::before {
+    content: '🖼️' !important;
+    font-size: 20px !important;
+    opacity: 0.3 !important;
+}
+
+.grid-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
 }
 
 /* Input row compact */
