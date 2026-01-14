@@ -2217,26 +2217,40 @@
                 // ============================================================
                 showToast('Step 2/3', 'Signing transactions...', 'info');
                 
+                // Wait for libraries to load if needed
                 if (typeof solanaWeb3 === 'undefined' || typeof bs58 === 'undefined') {
-                    throw new Error('Solana libraries not loaded!');
+                    showToast('Loading...', 'Waiting for Solana libraries...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                }
+                
+                // Check again after waiting
+                if (typeof solanaWeb3 === 'undefined') {
+                    throw new Error('Solana Web3.js library failed to load. Please refresh the page.');
+                }
+                if (typeof bs58 === 'undefined') {
+                    throw new Error('bs58 library failed to load. Please refresh the page.');
                 }
                 
                 const signedTransactions = [];
                 
                 for (const txData of createData.transactions) {
-                    // Decode base64 transaction
-                    const txBuffer = Buffer.from(txData.transaction, 'base64');
-                    const tx = solanaWeb3.VersionedTransaction.deserialize(txBuffer);
-                    
-                    // Sign with private key
-                    const secretKey = bs58.decode(wallet.privateKey);
-                    const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
-                    
-                    tx.sign([keypair]);
-                    
-                    // Encode back to base64
-                    const signedTx = Buffer.from(tx.serialize()).toString('base64');
-                    signedTransactions.push(signedTx);
+                    try {
+                        // Decode base64 transaction
+                        const txBuffer = Buffer.from(txData.transaction, 'base64');
+                        const tx = solanaWeb3.VersionedTransaction.deserialize(txBuffer);
+                        
+                        // Sign with private key
+                        const secretKey = bs58.decode(wallet.privateKey);
+                        const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
+                        
+                        tx.sign([keypair]);
+                        
+                        // Encode back to base64
+                        const signedTx = Buffer.from(tx.serialize()).toString('base64');
+                        signedTransactions.push(signedTx);
+                    } catch (signError) {
+                        throw new Error(`Signing failed: ${signError.message}`);
+                    }
                 }
                 
                 showToast('Signed!', `${signedTransactions.length} transaction(s) signed`, 'success');
@@ -2541,9 +2555,25 @@
     }
     </style>
 
-    <!-- Solana Web3.js and bs58 for transaction signing -->
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
+    <!-- Solana Web3.js and bs58 for transaction signing - LOAD BEFORE OTHER SCRIPTS -->
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/dist/index.min.js" crossorigin="anonymous"></script>
+    
+    <!-- Wait for libraries to load before running app scripts -->
+    <script>
+        // Ensure Solana libraries are available globally
+        window.addEventListener('load', function() {
+            if (typeof solanaWeb3 === 'undefined') {
+                console.error('Solana Web3.js failed to load!');
+                window.solanaWeb3 = window.solanaWeb3 || {};
+            }
+            if (typeof bs58 === 'undefined') {
+                console.error('bs58 failed to load!');
+            }
+            console.log('Solana Web3 loaded:', typeof solanaWeb3 !== 'undefined');
+            console.log('bs58 loaded:', typeof bs58 !== 'undefined');
+        });
+    </script>
     
     <script src="renderer.js"></script>
 </body>
