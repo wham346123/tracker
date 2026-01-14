@@ -2825,7 +2825,7 @@ input[type="number"] {
   color: #fff;
 }
 
-/* Saved/Google Layout - Side by Side Columns */
+/* Saved/Google Layout - Labels side by side */
 .saved-google-row {
     display: flex !important;
     gap: 8px !important;
@@ -2833,7 +2833,7 @@ input[type="number"] {
     width: 100% !important;
 }
 
-/* Each section is a vertical column */
+/* Section labels */
 .saved-section,
 .google-section {
     flex: 1 !important;
@@ -3989,36 +3989,27 @@ body {
     padding: 8px 10px !important;
 }
 
-/* Wrapper for each column (label + grid together) */
+/* Image sections - full width stacked vertically */
 .saved-images-section,
 .google-images-section {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 6px !important;
+    width: 100% !important;
+    margin-bottom: 8px !important;
 }
 
-/* Container that places the two columns side by side */
-.saved-google-row + .saved-images-section {
-    display: inline-block !important;
-    width: calc(50% - 4px) !important;
-    vertical-align: top !important;
-    margin-right: 4px !important;
+/* Saved images - red border box */
+.saved-images-section {
+    border: 3px solid #ef4444 !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    background: #0d0d0d !important;
 }
 
-.saved-google-row + .saved-images-section + .google-images-section {
-    display: inline-block !important;
-    width: calc(50% - 4px) !important;
-    vertical-align: top !important;
-    margin-left: 4px !important;
-}
-
-/* Force parent to allow inline-block layout */
-.form-compact {
-    font-size: 0 !important;
-}
-
-.form-compact > * {
-    font-size: 13px !important;
+/* Google images - green border box */
+.google-images-section {
+    border: 3px solid #22c55e !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    background: #0d0d0d !important;
 }
 
 .saved-images-section .image-grid,
