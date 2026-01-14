@@ -1841,8 +1841,13 @@
                         <input type="text" id="walletName" class="form-input" placeholder="My Wallet">
                     </div>
                     <div class="form-section">
-                        <label class="form-label">Private Key (Base58)</label>
-                        <textarea id="privateKeyInput" class="form-textarea" placeholder="Enter your Solana private key..." rows="3"></textarea>
+                        <label class="form-label">Public Address (Required) <span style="color:#22c55e;">*</span></label>
+                        <input type="text" id="publicAddressInput" class="form-input" placeholder="dogcz95Nra67TJUuvwqnfQo8G6zErVFpGjJoUgF49ke">
+                        <small style="color:#666;font-size:11px;">Your wallet's public address (44 characters)</small>
+                    </div>
+                    <div class="form-section">
+                        <label class="form-label">Private Key (Base58) <span style="color:#666;">(for signing, optional)</span></label>
+                        <textarea id="privateKeyInput" class="form-textarea" placeholder="Enter your Solana private key (optional)..." rows="2"></textarea>
                     </div>
                     <div class="wallet-warning">
                         ⚠️ Never share your private key. It is stored locally in your browser only.
@@ -2062,50 +2067,17 @@
             if (e.target === walletModal) walletModal.style.display = 'none';
         });
         
-        // Import wallet - EXTRACT PUBLIC KEY FROM SOLANA PRIVATE KEY
+        // Import wallet - USER PROVIDES PUBLIC ADDRESS
         confirmWalletImport?.addEventListener('click', function() {
-            const privateKey = privateKeyInput.value.trim();
-            const name = walletNameInput.value.trim();
+            const publicAddressInput = document.getElementById('publicAddressInput');
+            const publicAddress = publicAddressInput?.value?.trim();
+            const privateKey = privateKeyInput?.value?.trim();
+            const name = walletNameInput?.value?.trim();
             
-            if (!privateKey || privateKey.length < 32) {
-                alert('Please enter a valid Solana private key (base58 format)');
+            // PUBLIC ADDRESS IS REQUIRED
+            if (!publicAddress || publicAddress.length < 32 || publicAddress.length > 50) {
+                alert('Please enter your PUBLIC wallet address (32-44 characters)');
                 return;
-            }
-            
-            // SOLANA KEYPAIR FORMAT:
-            // A Solana base58 private key is 88 characters (64 bytes decoded)
-            // The first 32 bytes = secret seed
-            // The last 32 bytes = PUBLIC KEY
-            // So we can extract the public key from the last ~44 characters of the base58 string
-            
-            let publicKey = '';
-            try {
-                // For a proper 88-char Solana keypair, the public key is roughly the last 44 chars
-                // But base58 encoding varies, so we approximate
-                if (privateKey.length >= 80) {
-                    // Full keypair - extract approximate public key portion (last ~44 chars)
-                    publicKey = privateKey.slice(-44);
-                } else if (privateKey.length >= 43 && privateKey.length <= 44) {
-                    // This might already be just a public key
-                    publicKey = privateKey;
-                } else {
-                    // Shorter format - use a hash-based derivation
-                    const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-                    let hash = 0;
-                    for (let i = 0; i < privateKey.length; i++) {
-                        const idx = chars.indexOf(privateKey[i]);
-                        if (idx >= 0) hash = (hash * 58 + idx) >>> 0;
-                    }
-                    // Generate consistent "public key" representation
-                    let result = '';
-                    for (let i = 0; i < 44; i++) {
-                        result += chars[(hash + i * 7) % 58];
-                        hash = (hash * 31 + privateKey.charCodeAt(i % privateKey.length)) >>> 0;
-                    }
-                    publicKey = result;
-                }
-            } catch(e) {
-                publicKey = 'Error deriving address';
             }
             
             const walletId = 'wallet_' + Date.now();
@@ -2113,19 +2085,21 @@
             const wallet = {
                 id: walletId,
                 name: name || '',
-                address: publicKey, // Store full public address
-                privateKey: privateKey
+                address: publicAddress, // Store the USER-PROVIDED public address
+                privateKey: privateKey || '' // Optional - for future signing
             };
             
             window.walletSystem.add(wallet);
             
-            privateKeyInput.value = '';
-            walletNameInput.value = '';
+            // Clear inputs
+            if (publicAddressInput) publicAddressInput.value = '';
+            if (privateKeyInput) privateKeyInput.value = '';
+            if (walletNameInput) walletNameInput.value = '';
             
             renderImportedWallets();
             renderWalletDropdown();
             
-            showToast('Success', `Wallet imported: ${truncateAddress(publicKey)}`, 'success');
+            showToast('Success', `Wallet imported: ${truncateAddress(publicAddress)}`, 'success');
         });
         
         // Handle dropdown change
@@ -2171,6 +2145,7 @@
             const img = imagePreview?.querySelector('img');
             const imageData = window.currentImageData || img?.src || '';
             
+            // IMPORTANT: API expects PUBLIC ADDRESS in wallets array, NOT private key!
             const deployData = {
                 type: 'deploy',
                 platform: platform,
@@ -2183,7 +2158,7 @@
                 image: imageData,
                 amount: amount,
                 buy_amount: amount,
-                wallets: [wallet.privateKey],
+                wallets: [wallet.address], // PUBLIC ADDRESS, not private key!
                 prio: 0.001
             };
             
