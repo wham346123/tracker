@@ -2817,15 +2817,22 @@
             tweetFeed.insertBefore(tweetCard, tweetFeed.firstChild);
             console.log('✅ Tweet card added, fetching content...');
             
-            // Fetch actual tweet content from VPS proxy
-            fetch(`http://149.28.53.76:47291/tweet?url=${encodeURIComponent(url)}`)
-                .then(response => response.json())
+            // Fetch actual tweet content from VPS proxy - USE HTTPS
+            fetch(`https://149.28.53.76:47291/tweet?url=${encodeURIComponent(url)}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to fetch tweet');
+                    return response.json();
+                })
                 .then(data => {
                     console.log('📥 Tweet data:', data);
                     
+                    if (!data.success || !data.text) {
+                        throw new Error('Invalid tweet data');
+                    }
+                    
                     // Update tweet content
                     const contentEl = tweetCard.querySelector('.tweet-content');
-                    if (contentEl && data.text) {
+                    if (contentEl) {
                         contentEl.textContent = data.text;
                     }
                     
@@ -2862,7 +2869,8 @@
                     console.error('❌ Failed to fetch tweet:', error);
                     const contentEl = tweetCard.querySelector('.tweet-content');
                     if (contentEl) {
-                        contentEl.textContent = `Tweet from @${username} - Click DEPLOY to use`;
+                        // NEVER show placeholder - show error instead
+                        contentEl.innerHTML = `<span style="color:#ef4444;">⚠️ Could not load tweet</span><br><small style="color:#666;">Try: <a href="${url}" target="_blank" style="color:#0ea5e9;">View on X →</a></small>`;
                     }
                     tweetCard.classList.remove('loading');
                 });
