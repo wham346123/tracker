@@ -158,34 +158,12 @@ app.post('/deploy', async (req, res) => {
       return res.status(400).json({ error: 'Token image is required' });
     }
     
-    // Decrypt wallets
-    const decryptedWallets = [];
-    for (const compositeWallet of wallets) {
-      try {
-        const parts = compositeWallet.split(':');
-        if (parts.length < 2) {
-          throw new Error('Invalid wallet format');
-        }
-        
-        const publicKey = parts[0];
-        const encryptedKey = parts.slice(1).join(':');
-        
-        const privateKey = decryptPrivateKey(encryptedKey);
-        
-        decryptedWallets.push({
-          publicKey,
-          privateKey
-        });
-      } catch (error) {
-        return res.status(400).json({ error: 'Failed to decrypt wallet: ' + error.message });
-      }
-    }
-    
     console.log(`🚀 Deploying ${platform} token: ${name} (${symbol})`);
-    console.log(`   Wallets: ${decryptedWallets.length}`);
+    console.log(`   Wallets: ${wallets.length}`);
     console.log(`   Amount: ${amount}`);
     
-    // Build request for Token API
+    // Build request for Token API - Send composite keys directly
+    // The Token API will handle decryption itself
     const deployRequest = {
       platform,
       name,
@@ -193,7 +171,7 @@ app.post('/deploy', async (req, res) => {
       image,
       amount: amount || 0.01,
       prio: prio || 0.001,
-      wallets: decryptedWallets.map(w => w.privateKey), // Send decrypted private keys to API
+      wallets: wallets, // Send composite keys (publicKey:encryptedPrivateKey)
       website,
       twitter
     };
