@@ -1805,11 +1805,20 @@
         <div class="sub-modal-content">
             <div class="sub-modal-header">
                 <span class="sub-modal-icon">🔐</span>
-                <span class="sub-modal-title">Import Wallet</span>
+                <span class="sub-modal-title">Wallet & Presets</span>
                 <button class="sub-modal-close" id="closeWalletModal">×</button>
             </div>
+            
+            <!-- Tab Navigation -->
+            <div class="wallet-modal-tabs">
+                <button class="wallet-tab-btn active" data-wallet-tab="import">Import Wallet</button>
+                <button class="wallet-tab-btn" data-wallet-tab="presets">⚙️ Custom Presets</button>
+            </div>
+            
             <div class="sub-modal-body">
-                <div class="wallet-import-form">
+                <!-- Import Wallet Tab Content -->
+                <div class="wallet-tab-content active" id="wallet-import-tab">
+                    <div class="wallet-import-form">
                     <div class="form-section">
                         <label class="form-label">Wallet Name (optional)</label>
                         <input type="text" id="walletName" class="form-input" placeholder="My Wallet">
@@ -1835,6 +1844,31 @@
                         <p class="no-wallets-text">No wallets imported yet</p>
                     </div>
                 </div>
+                </div>
+                <!-- End Import Wallet Tab -->
+                
+                <!-- Custom Presets Tab Content -->
+                <div class="wallet-tab-content" id="wallet-presets-tab">
+                    <div style="padding: 20px; text-align: center;">
+                        <button class="add-preset-btn" onclick="document.getElementById('customPresetsModal').style.display='flex'; if(window.customPresetsSystem) window.customPresetsSystem.renderPresetsList(document.getElementById('presetsList'));">
+                            ⚙️ Manage Custom Presets
+                        </button>
+                        <p style="color:#666;margin-top:15px;font-size:13px;">
+                            Create custom deploy presets with keybinds to quickly fill the deploy form from highlighted text in tweets.
+                        </p>
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 8px; text-align: left;">
+                            <h4 style="color: #22c55e; margin: 0 0 10px 0;">How to Use:</h4>
+                            <ol style="color: #888; font-size: 12px; margin: 0; padding-left: 20px;">
+                                <li>Click "Manage Custom Presets" to create a preset</li>
+                                <li>Set name, platform, ticker mode, image type, and keybind</li>
+                                <li>Highlight text in any tweet</li>
+                                <li>Press your keybind (e.g., Y)</li>
+                                <li>Deploy form auto-fills instantly! ⚡</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                <!-- End Custom Presets Tab -->
             </div>
             <div class="sub-modal-footer">
                 <button class="modal-cancel-btn" id="cancelWalletImport">Cancel</button>
@@ -2958,6 +2992,127 @@
     })();
     </script>
     
+    <!-- Custom Presets Modal -->
+    <div class="sub-modal" id="customPresetsModal" style="display: none;">
+        <div class="sub-modal-content large">
+            <div class="sub-modal-header">
+                <span class="sub-modal-icon">⚙️</span>
+                <span class="sub-modal-title">Custom Presets</span>
+                <button class="sub-modal-close" id="closeCustomPresetsModal">×</button>
+            </div>
+            
+            <!-- Presets List View -->
+            <div id="presetsListView" class="sub-modal-body">
+                <div class="presets-header">
+                    <button class="add-preset-btn" id="addPresetBtn">+ Add New Preset</button>
+                </div>
+                <div class="presets-list" id="presetsList">
+                    <p class="no-presets-text">No custom presets yet. Click "Add New Preset" to create one.</p>
+                </div>
+            </div>
+            
+            <!-- Add/Edit Preset Form -->
+            <div id="addPresetForm" class="sub-modal-body" style="display: none;">
+                <div class="preset-form">
+                    <div class="form-section">
+                        <label class="form-label">Preset Name</label>
+                        <input type="text" id="presetNameInput" class="form-input" placeholder="e.g., COIN OF AMERICA">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-section half">
+                            <label class="form-label">Name Prefix</label>
+                            <input type="text" id="namePrefix" class="form-input" placeholder="e.g., Justice For">
+                        </div>
+                        <div class="form-section half">
+                            <label class="form-label">Name Suffix</label>
+                            <input type="text" id="nameSuffix" class="form-input" placeholder="e.g., ification">
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <label class="form-label">Deploy Platform</label>
+                        <select id="platformSelect" class="form-select">
+                            <option value="default">Use Account Default</option>
+                            <option value="pump">Pump</option>
+                            <option value="usd1">USD1</option>
+                            <option value="bonk">BONK</option>
+                            <option value="bnb">BNB</option>
+                            <option value="bags">Bags</option>
+                            <option value="jupiter">Jupiter</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-section">
+                        <label class="form-label">Ticker Mode</label>
+                        <select id="tickerModeSelect" class="form-select">
+                            <option value="selected">Selected Text</option>
+                            <option value="abbreviation">Abbreviation</option>
+                            <option value="first-word">First Word</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <input type="text" id="customTickerInput" class="form-input" placeholder="Custom ticker..." style="margin-top: 8px; display: none;">
+                    </div>
+                    
+                    <div class="form-section">
+                        <label class="form-label">Image Type</label>
+                        <select id="imageTypeSelect" class="form-select">
+                            <option value="post">Image in Post</option>
+                            <option value="ascii">ASCII Art</option>
+                            <option value="soltext">SOLTEXT (gradient)</option>
+                            <option value="letter">Letter Image</option>
+                            <option value="custom">Custom Image</option>
+                        </select>
+                        <input type="text" id="customImageUrlInput" class="form-input" placeholder="https://example.com/image.png" style="margin-top: 8px; display: none;">
+                    </div>
+                    
+                    <div class="form-section">
+                        <label class="form-label">Keybind</label>
+                        <div class="keybind-capture">
+                            <span id="keybindDisplay" class="keybind-display">Not Set</span>
+                            <button class="keybind-btn" id="setKeybindBtn">Set Keybind</button>
+                            <button class="keybind-clear-btn" id="clearKeybindBtn" style="display: none;">Clear</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="translateChineseCheck">
+                            <span>Translate name to Chinese</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="preset-form-footer">
+                    <button class="modal-cancel-btn" id="cancelPresetForm">Cancel</button>
+                    <button class="modal-confirm-btn" id="savePresetBtn">Save Preset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Wallet Modal Tab Switching
+    document.addEventListener('DOMContentLoaded', function() {
+        const walletTabs = document.querySelectorAll('.wallet-tab-btn');
+        const walletTabContents = document.querySelectorAll('.wallet-tab-content');
+        
+        walletTabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabName = this.dataset.walletTab;
+                
+                // Remove active from all
+                walletTabs.forEach(t => t.classList.remove('active'));
+                walletTabContents.forEach(c => c.classList.remove('active'));
+                
+                // Add active to clicked
+                this.classList.add('active');
+                document.getElementById(`wallet-${tabName}-tab`).classList.add('active');
+            });
+        });
+    });
+    </script>
+
     <script src="custom-presets.js"></script>
     <script src="renderer.js"></script>
 </body>
