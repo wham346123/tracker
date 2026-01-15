@@ -1931,20 +1931,27 @@
         
         // Socket.IO connection to Token API
         let tokenSocket = null;
+        let isSocketConnected = false;
         
         function connectTokenSocket() {
             try {
+                console.log('🔌 Connecting to Token API via Socket.IO...');
+                showToast('Connecting...', 'Connecting to Token API...', 'info');
+                
                 // Connect directly to Token API via Socket.IO
                 tokenSocket = io('https://token-api-virginia.up.railway.app', {
-                    transports: ['websocket', 'polling'],
+                    transports: ['polling', 'websocket'], // Try polling first, then upgrade
                     reconnection: true,
-                    reconnectionDelay: 1000,
-                    reconnectionAttempts: 5
+                    reconnectionDelay: 2000,
+                    reconnectionAttempts: 10,
+                    timeout: 20000,
+                    forceNew: true
                 });
                 
                 tokenSocket.on('connect', () => {
-                    console.log('✅ Socket.IO connected to Token API:', tokenSocket.id);
-                    showToast('Connected', 'Token API ready!', 'success');
+                    isSocketConnected = true;
+                    console.log('✅✅✅ Socket.IO CONNECTED to Token API! ID:', tokenSocket.id);
+                    showToast('✅ Connected!', 'Token API ready for deploys!', 'success');
                 });
                 
                 tokenSocket.on('token_created', (data) => {
@@ -1965,27 +1972,58 @@
                 
                 tokenSocket.on('error', (data) => {
                     console.error('❌ Token API error:', data);
-                    showToast('❌ Error', data.error || 'Unknown error', 'error');
+                    showToast('❌ Deploy Error', data.error || 'Unknown error', 'error');
                 });
                 
                 tokenSocket.on('disconnect', (reason) => {
-                    console.log('❌ Disconnected from Token API:', reason);
-                    showToast('Disconnected', 'Reconnecting...', 'info');
+                    isSocketConnected = false;
+                    console.log('❌ Disconnected from Token API. Reason:', reason);
+                    showToast('Disconnected', 'Reconnecting to Token API...', 'info');
                 });
                 
                 tokenSocket.on('connect_error', (error) => {
-                    console.error('❌ Connection error:', error);
-                    showToast('Connection Error', 'Failed to connect to Token API', 'error');
+                    isSocketConnected = false;
+                    console.error('❌ Socket.IO connection error:', error.message);
+                    console.error('Full error:', error);
+                    showToast('Connection Failed', 'Retrying connection...', 'error');
+                });
+                
+                tokenSocket.on('reconnect', (attemptNumber) => {
+                    console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+                    showToast('Reconnected', 'Token API connection restored!', 'success');
+                });
+                
+                tokenSocket.on('reconnect_attempt', (attemptNumber) => {
+                    console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+                });
+                
+                tokenSocket.on('reconnect_error', (error) => {
+                    console.error('❌ Reconnection error:', error);
+                });
+                
+                tokenSocket.on('reconnect_failed', () => {
+                    console.error('❌ Failed to reconnect after all attempts');
+                    showToast('Connection Failed', 'Cannot connect to Token API. Check console for details.', 'error');
                 });
                 
             } catch(e) {
-                console.error('Socket.IO init failed:', e);
-                showToast('Error', 'Failed to initialize Socket.IO', 'error');
+                console.error('❌ Socket.IO init failed:', e);
+                showToast('Error', 'Failed to initialize Socket.IO: ' + e.message, 'error');
             }
         }
         
         // Initialize Socket.IO on page load
+        console.log('📡 Initializing Socket.IO connection...');
         connectTokenSocket();
+        
+        // Also provide manual reconnect button
+        window.reconnectTokenAPI = function() {
+            if (tokenSocket) {
+                tokenSocket.disconnect();
+                tokenSocket = null;
+            }
+            connectTokenSocket();
+        };
         
         // Render wallet dropdown
         function renderWalletDropdown() {
