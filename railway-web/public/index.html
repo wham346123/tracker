@@ -2040,57 +2040,68 @@
             if (e.target === walletModal) walletModal.style.display = 'none';
         });
         
-        // Import wallet - PRIVATE KEY IS REQUIRED FOR SIGNING
-        confirmWalletImport?.addEventListener('click', function() {
-            const publicAddressInput = document.getElementById('publicAddressInput');
-            const publicAddress = publicAddressInput?.value?.trim();
+        // Import wallet - NEW 2-STEP API
+        confirmWalletImport?.addEventListener('click', async function() {
             const privateKey = privateKeyInput?.value?.trim();
             const name = walletNameInput?.value?.trim();
             
-            // PRIVATE KEY IS REQUIRED for token API signing
+            // PRIVATE KEY IS REQUIRED
             if (!privateKey || privateKey.length < 32) {
-                alert('⚠️ Private Key is REQUIRED!\n\nThe Token API needs your private key to sign transactions CLIENT-SIDE.\n\nYour key never leaves your browser and is stored locally only.');
+                alert('⚠️ Private Key is REQUIRED!\n\nThe server will encrypt it and return a secure composite key.\n\nYour key is encrypted with AES-256-GCM and never stored on the server.');
                 return;
             }
             
-            // Try to derive public address from private key if not provided
-            let derivedAddress = publicAddress;
-            if (!derivedAddress && typeof solanaWeb3 !== 'undefined' && typeof bs58 !== 'undefined') {
-                try {
-                    const secretKey = bs58.decode(privateKey);
-                    const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
-                    derivedAddress = keypair.publicKey.toString();
-                } catch(e) {
-                    alert('Invalid private key format. Please use base58 format.');
-                    return;
+            try {
+                showToast('Importing...', 'Encrypting wallet...', 'info');
+                
+                // Call /import endpoint
+                const response = await fetch('/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        walletPrivateKey: privateKey
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Import failed');
                 }
+                
+                const result = await response.json();
+                console.log('Import response:', result);
+                
+                if (!result.wallet) {
+                    throw new Error('No composite key returned');
+                }
+                
+                // Extract public key from composite (format: publicKey:encryptedKey)
+                const publicKey = result.wallet.split(':')[0];
+                
+                const walletId = 'wallet_' + Date.now();
+                
+                const wallet = {
+                    id: walletId,
+                    name: name || '',
+                    address: publicKey,
+                    compositeKey: result.wallet // Store the encrypted composite key
+                };
+                
+                window.walletSystem.add(wallet);
+                
+                // Clear inputs
+                if (privateKeyInput) privateKeyInput.value = '';
+                if (walletNameInput) walletNameInput.value = '';
+                
+                renderImportedWallets();
+                renderWalletDropdown();
+                
+                showToast('✅ Success', `Wallet imported: ${truncateAddress(publicKey)}`, 'success');
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                showToast('❌ Error', error.message, 'error');
             }
-            
-            if (!derivedAddress) {
-                alert('Please provide your public address or ensure private key is valid.');
-                return;
-            }
-            
-            const walletId = 'wallet_' + Date.now();
-            
-            const wallet = {
-                id: walletId,
-                name: name || '',
-                address: derivedAddress,
-                privateKey: privateKey // REQUIRED for signing
-            };
-            
-            window.walletSystem.add(wallet);
-            
-            // Clear inputs
-            if (publicAddressInput) publicAddressInput.value = '';
-            if (privateKeyInput) privateKeyInput.value = '';
-            if (walletNameInput) walletNameInput.value = '';
-            
-            renderImportedWallets();
-            renderWalletDropdown();
-            
-            showToast('Success', `Wallet imported: ${truncateAddress(derivedAddress)}`, 'success');
         });
         
         // Handle dropdown change
@@ -2166,7 +2177,7 @@
             }
         }
         
-        // PROPER TOKEN API IMPLEMENTATION - 3 STEP PROCESS
+        // NEW 2-STEP TOKEN API IMPLEMENTATION
         async function deployToken() {
             const wallet = window.walletSystem.getActive();
             if (!wallet) {
@@ -2174,8 +2185,8 @@
                 return;
             }
             
-            if (!wallet.privateKey) {
-                showToast('Error', 'Wallet needs private key for signing!', 'error');
+            if (!wallet.compositeKey) {
+                showToast('Error', 'Wallet not properly imported!', 'error');
                 return;
             }
             
@@ -2199,15 +2210,13 @@
                 return;
             }
             
-            const TOKEN_API_URL = 'https://token-api.up.railway.app';
-            
             try {
                 // ============================================================
-                // STEP 1: CREATE - Get unsigned transactions from API
+                // SINGLE STEP: DEPLOY - Server handles decrypt, sign, submit
                 // ============================================================
-                showToast('Step 1/3', 'Creating unsigned transactions...', 'info');
+                showToast('Deploying...', `Creating ${platform.toUpperCase()} token...`, 'info');
                 
-                const createResponse = await fetch(`${TOKEN_API_URL}/create`, {
+                const deployResponse = await fetch('/deploy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2217,112 +2226,31 @@
                         image: imageData,
                         amount: amount,
                         prio: 0.001,
-                        wallets: [wallet.address], // PUBLIC address
+                        wallets: [wallet.compositeKey], // Send composite key
                         website: website || undefined,
                         twitter: twitter || undefined
                     })
                 });
                 
-                if (!createResponse.ok) {
-                    const errorText = await createResponse.text();
-                    throw new Error(`Create failed: ${errorText}`);
+                if (!deployResponse.ok) {
+                    const errorData = await deployResponse.json();
+                    throw new Error(errorData.error || 'Deploy failed');
                 }
                 
-                const createData = await createResponse.json();
-                console.log('Create response:', createData);
+                const result = await deployResponse.json();
+                console.log('Deploy response:', result);
                 
-                if (!createData.mint_pubkey || !createData.transactions) {
-                    throw new Error('Invalid response from /create endpoint');
-                }
-                
-                showToast('Success!', `Token address: ${createData.mint_pubkey.slice(0,8)}...`, 'success');
-                
-                // ============================================================
-                // STEP 2: SIGN - Sign transactions CLIENT-SIDE
-                // ============================================================
-                showToast('Step 2/3', 'Signing transactions...', 'info');
-                
-                // Wait for libraries to load if needed
-                if (typeof solanaWeb3 === 'undefined' || typeof bs58 === 'undefined') {
-                    showToast('Loading...', 'Waiting for Solana libraries...', 'info');
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-                }
-                
-                // Check again after waiting
-                if (typeof solanaWeb3 === 'undefined') {
-                    throw new Error('Solana Web3.js library failed to load. Please refresh the page.');
-                }
-                if (typeof bs58 === 'undefined') {
-                    throw new Error('bs58 library failed to load. Please refresh the page.');
-                }
-                
-                const signedTransactions = [];
-                
-                for (const txData of createData.transactions) {
-                    try {
-                        // Decode base64 transaction (BROWSER-COMPATIBLE)
-                        const binaryString = atob(txData.transaction);
-                        const txBuffer = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) {
-                            txBuffer[i] = binaryString.charCodeAt(i);
-                        }
-                        
-                        const tx = solanaWeb3.VersionedTransaction.deserialize(txBuffer);
-                        
-                        // Sign with private key
-                        const secretKey = bs58.decode(wallet.privateKey);
-                        const keypair = solanaWeb3.Keypair.fromSecretKey(secretKey);
-                        
-                        tx.sign([keypair]);
-                        
-                        // Encode back to base64 (BROWSER-COMPATIBLE)
-                        const serialized = tx.serialize();
-                        let binary = '';
-                        for (let i = 0; i < serialized.length; i++) {
-                            binary += String.fromCharCode(serialized[i]);
-                        }
-                        const signedTx = btoa(binary);
-                        
-                        signedTransactions.push(signedTx);
-                    } catch (signError) {
-                        throw new Error(`Signing failed: ${signError.message}`);
-                    }
-                }
-                
-                showToast('Signed!', `${signedTransactions.length} transaction(s) signed`, 'success');
-                
-                // ============================================================
-                // STEP 3: SUBMIT - Send signed transactions to blockchain
-                // ============================================================
-                showToast('Step 3/3', 'Submitting to blockchain...', 'info');
-                
-                const submitResponse = await fetch(`${TOKEN_API_URL}/submit`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        transactions: signedTransactions
-                    })
-                });
-                
-                if (!submitResponse.ok) {
-                    const errorText = await submitResponse.text();
-                    throw new Error(`Submit failed: ${errorText}`);
-                }
-                
-                const submitData = await submitResponse.json();
-                console.log('Submit response:', submitData);
-                
-                if (!submitData.signatures || submitData.signatures.length === 0) {
-                    throw new Error('No transaction signatures returned');
+                if (!result.mint || !result.signatures) {
+                    throw new Error('Invalid response from deploy endpoint');
                 }
                 
                 // ============================================================
                 // SUCCESS!
                 // ============================================================
-                showToast('🎉 SUCCESS!', `Token deployed: ${createData.mint_pubkey}`, 'success');
+                showToast('🎉 SUCCESS!', `Token deployed: ${result.mint}`, 'success');
                 
                 // Show Solscan links
-                submitData.signatures.forEach((sig, idx) => {
+                result.signatures.forEach((sig, idx) => {
                     const solscanUrl = `https://solscan.io/tx/${sig}`;
                     console.log(`Transaction ${idx + 1}: ${solscanUrl}`);
                     setTimeout(() => {

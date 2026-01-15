@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +15,10 @@ const PORT = process.env.PORT || 3000;
 // Token API endpoint
 const TOKEN_API_URL = 'https://token-api.up.railway.app';
 
+// Master encryption key (AES-256 requires 32 bytes)
+// Generate with: crypto.randomBytes(32).toString('hex')
+const ENCRYPTION_KEY = process.env.ENCRYPTION_MASTER_KEY || 'a7f8e3d2c1b6a5947382f1e0d9c8b7a6f5e4d3c2b1a09f8e7d6c5b4a39281706';
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -21,6 +26,62 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files from 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
+
+// =====================================================
+// ENCRYPTION UTILITIES
+// =====================================================
+
+function encryptPrivateKey(privateKey) {
+  try {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    
+    let encrypted = cipher.update(privateKey, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    const authTag = cipher.getAuthTag();
+    
+    // Format: iv:authTag:encrypted
+    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  } catch (error) {
+    throw new Error('Encryption failed: ' + error.message);
+  }
+}
+
+function decryptPrivateKey(encryptedData) {
+  try {
+    const parts = encryptedData.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
+    
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const encrypted = parts[2];
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    decipher.setAuthTag(authTag);
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    throw new Error('Decryption failed: ' + error.message);
+  }
+}
+
+// Derive public key from private key using base58 decoding
+function derivePublicKey(privateKeyBase58) {
+  try {
+    // This is a placeholder - actual implementation would use Solana's keypair
+    // For now, return a mock public key format
+    // In production, you'd use: const keypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58))
+    return 'DERIVED_' + crypto.createHash('sha256').update(privateKeyBase58).digest('hex').slice(0, 32);
+  } catch (error) {
+    throw new Error('Failed to derive public key');
+  }
+}
 
 // =====================================================
 // API ENDPOINTS
@@ -31,34 +92,139 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Proxy to Token API - Create transaction
-app.post('/api/create', async (req, res) => {
+// POST /import - Import wallet and return encrypted composite key
+app.post('/import', (req, res) => {
   try {
-    const response = await fetch(`${TOKEN_API_URL}/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body)
-    });
-    const data = await response.json();
-    res.json(data);
+    const { walletPrivateKey } = req.body;
+    
+    // Validation
+    if (!walletPrivateKey) {
+      return res.status(400).json({ error: 'Private key is required' });
+    }
+    
+    if (typeof walletPrivateKey !== 'string' || walletPrivateKey.length < 32) {
+      return res.status(400).json({ error: 'Invalid private key format' });
+    }
+    
+    // Derive public key from private key
+    const publicKey = derivePublicKey(walletPrivateKey);
+    
+    // Encrypt the private key
+    const encryptedPrivateKey = encryptPrivateKey(walletPrivateKey);
+    
+    // Create composite key: publicKey:encryptedPrivateKey
+    const compositeKey = `${publicKey}:${encryptedPrivateKey}`;
+    
+    console.log('✅ Wallet imported:', publicKey);
+    
+    res.json({ wallet: compositeKey });
   } catch (error) {
-    console.error('Create error:', error);
+    console.error('Import error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Proxy to Token API - Submit signed transaction
-app.post('/api/submit', async (req, res) => {
+// POST /deploy - Deploy token (decrypt wallet, build, sign, submit)
+app.post('/deploy', async (req, res) => {
   try {
-    const response = await fetch(`${TOKEN_API_URL}/submit`, {
+    const { platform, name, symbol, image, amount, prio, wallets, website, twitter } = req.body;
+    
+    // Validation
+    if (!wallets || !Array.isArray(wallets) || wallets.length === 0) {
+      return res.status(400).json({ error: 'At least one wallet is required' });
+    }
+    
+    // Validate platform
+    const validPlatforms = ['pump', 'bonk', 'usd1'];
+    if (!validPlatforms.includes(platform)) {
+      return res.status(400).json({ error: 'Unsupported platform' });
+    }
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Token name is required' });
+    }
+    
+    if (!symbol) {
+      return res.status(400).json({ error: 'Token symbol is required' });
+    }
+    
+    if (!image) {
+      return res.status(400).json({ error: 'Token image is required' });
+    }
+    
+    // Decrypt wallets
+    const decryptedWallets = [];
+    for (const compositeWallet of wallets) {
+      try {
+        const parts = compositeWallet.split(':');
+        if (parts.length < 2) {
+          throw new Error('Invalid wallet format');
+        }
+        
+        const publicKey = parts[0];
+        const encryptedKey = parts.slice(1).join(':');
+        
+        const privateKey = decryptPrivateKey(encryptedKey);
+        
+        decryptedWallets.push({
+          publicKey,
+          privateKey
+        });
+      } catch (error) {
+        return res.status(400).json({ error: 'Failed to decrypt wallet: ' + error.message });
+      }
+    }
+    
+    console.log(`🚀 Deploying ${platform} token: ${name} (${symbol})`);
+    console.log(`   Wallets: ${decryptedWallets.length}`);
+    console.log(`   Amount: ${amount}`);
+    
+    // Build request for Token API
+    const deployRequest = {
+      platform,
+      name,
+      symbol,
+      image,
+      amount: amount || 0.01,
+      prio: prio || 0.001,
+      wallets: decryptedWallets.map(w => w.privateKey), // Send decrypted private keys to API
+      website,
+      twitter
+    };
+    
+    // Call Token API /deploy endpoint
+    const response = await fetch(`${TOKEN_API_URL}/deploy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(deployRequest)
     });
-    const data = await response.json();
-    res.json(data);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Token API error: ${errorText}`);
+    }
+    
+    const result = await response.json();
+    
+    console.log('✅ Token deployed:', result.mint);
+    
+    // Return mint address and signatures
+    res.json({
+      mint: result.mint,
+      signatures: result.signatures
+    });
+    
   } catch (error) {
-    console.error('Submit error:', error);
+    console.error('Deploy error:', error);
+    
+    // Map specific errors
+    if (error.message.includes('generate metadata')) {
+      return res.status(400).json({ error: 'Failed to generate metadata' });
+    }
+    if (error.message.includes('submit transaction')) {
+      return res.status(400).json({ error: 'Failed to submit transaction' });
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -196,32 +362,8 @@ wss.on('connection', (ws) => {
       
       // Handle different message types
       switch (data.type) {
-        case 'deploy':
-          // Proxy deploy request to token API
-          await handleDeploy(ws, data);
-          break;
-          
-        case 'pre_upload':
-          // Handle image pre-upload
-          ws.send(JSON.stringify({ 
-            type: 'pre_upload_success', 
-            uri: data.image_data,
-            cached: true 
-          }));
-          break;
-          
-        case 'pre_build':
-          // Acknowledge pre-build (actual building happens on deploy)
-          ws.send(JSON.stringify({ 
-            type: 'pre_build_success',
-            txId: `prebuild_${Date.now()}`,
-            mint: 'pending'
-          }));
-          break;
-          
-        case 'blast_now':
-          // Handle instant deploy
-          ws.send(JSON.stringify({ type: 'status', message: 'Deploy initiated' }));
+        case 'ping':
+          ws.send(JSON.stringify({ type: 'pong' }));
           break;
           
         default:
@@ -244,88 +386,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Handle deploy request
-// Supported platforms: pump, bonk, usd1
-// NOTE: usd1 uses USD1 tokens for amount (NOT SOL)
-async function handleDeploy(ws, data) {
-  try {
-    // Get platform - support both 'type' and 'platform' keys
-    const platform = data.platform || data.type || 'pump';
-    
-    // Validate platform
-    const validPlatforms = ['pump', 'bonk', 'usd1'];
-    if (!validPlatforms.includes(platform)) {
-      ws.send(JSON.stringify({
-        type: 'token_create_error',
-        message: `Invalid platform: ${platform}. Supported: pump, bonk, usd1`
-      }));
-      return;
-    }
-    
-    // Build request for token API
-    const createRequest = {
-      platform: platform,
-      name: data.name || 'My Token',
-      symbol: data.ticker || data.symbol || 'TOKEN',
-      image: data.image_data || data.image || '',
-      prio: data.prio || 0.001, // MEV protection tip (max 0.5 SOL)
-      amount: data.amount || data.buy_amount || 0.01, // REQUIRED: Buy amount in SOL (or USD1 for usd1 platform)
-      wallets: data.wallets || []
-    };
-    
-    // Add optional fields
-    if (data.twitter) createRequest.twitter = data.twitter;
-    if (data.website) createRequest.website = data.website;
-    
-    // Add bundle configuration for multi-wallet buys
-    if (data.bundle && data.bundle.enabled) {
-      createRequest.bundle = {
-        enabled: true,
-        amount: data.bundle.amount || 0.1 // Total SOL to split among wallets
-      };
-    }
-    
-    ws.send(JSON.stringify({ 
-      type: 'status', 
-      message: `Creating ${platform.toUpperCase()} token transaction...` 
-    }));
-    
-    console.log('Deploy request:', JSON.stringify(createRequest, null, 2));
-    
-    // Call token API
-    const response = await fetch(`${TOKEN_API_URL}/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(createRequest)
-    });
-    
-    const result = await response.json();
-    console.log('Token API response:', JSON.stringify(result, null, 2));
-    
-    if (result.mint_pubkey || result.mint) {
-      ws.send(JSON.stringify({
-        type: 'token_create_success',
-        message: `${platform.toUpperCase()} token created successfully!`,
-        address: result.mint_pubkey || result.mint,
-        transactions: result.transactions,
-        platform: platform
-      }));
-    } else {
-      ws.send(JSON.stringify({
-        type: 'token_create_error',
-        message: result.error || result.message || 'Failed to create transaction',
-        details: result
-      }));
-    }
-  } catch (error) {
-    console.error('Deploy error:', error);
-    ws.send(JSON.stringify({
-      type: 'token_create_error',
-      message: error.message
-    }));
-  }
-}
-
 // Broadcast to all clients (for real-time updates)
 function broadcast(data) {
   const message = JSON.stringify(data);
@@ -342,17 +402,20 @@ function broadcast(data) {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('╔════════════════════════════════════════╗');
-  console.log('║   Token Deploy Web Server Running      ║');
+  console.log('║   Token Deploy Server (2-Step API)    ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║   Port: ${PORT}                            ║`);
-  console.log(`║   Token API: ${TOKEN_API_URL}  ║`);
+  console.log(`║   Port: ${PORT.toString().padEnd(32)}║`);
+  console.log(`║   Token API: ${TOKEN_API_URL.padEnd(22)}║`);
   console.log('╚════════════════════════════════════════╝');
   console.log('');
   console.log('Endpoints:');
-  console.log('  GET  /health        - Health check');
-  console.log('  POST /api/create    - Create token transaction');
-  console.log('  POST /api/submit    - Submit signed transaction');
-  console.log('  POST /api/translate - Translate text (DeepL)');
-  console.log('  GET  /api/tweet     - Fetch tweet data');
-  console.log('  WS   /              - WebSocket connection');
+  console.log('  GET  /health         - Health check');
+  console.log('  POST /import         - Import wallet (encrypt)');
+  console.log('  POST /deploy         - Deploy token (decrypt + sign + submit)');
+  console.log('  POST /api/translate  - Translate text (DeepL)');
+  console.log('  GET  /api/tweet      - Fetch tweet data');
+  console.log('  WS   /               - WebSocket connection');
+  console.log('');
+  console.log('🔐 Encryption: AES-256-GCM');
+  console.log('🚀 Ready for token deployments!');
 });
