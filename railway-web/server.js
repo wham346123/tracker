@@ -95,33 +95,31 @@ app.post('/api/translate', async (req, res) => {
   }
 });
 
-// Fetch tweet data (proxy for CORS)
+// Fetch tweet data (proxy to VPS server)
 app.get('/api/tweet', async (req, res) => {
   try {
     const tweetUrl = req.query.url;
     if (!tweetUrl) {
-      return res.status(400).json({ error: 'Missing url parameter' });
+      return res.status(400).json({ success: false, error: 'Missing url parameter' });
     }
     
-    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}`;
-    const response = await fetch(oembedUrl);
+    // Proxy to VPS server (HTTP is fine for server-to-server)
+    const vpsUrl = `http://149.28.53.76:47291/tweet?url=${encodeURIComponent(tweetUrl)}`;
+    console.log('Fetching tweet from VPS:', vpsUrl);
+    
+    const response = await fetch(vpsUrl);
+    if (!response.ok) {
+      throw new Error(`VPS returned ${response.status}`);
+    }
+    
     const data = await response.json();
+    console.log('VPS response:', data);
     
-    // Extract text from HTML
-    let text = '';
-    if (data.html) {
-      text = data.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-    
-    res.json({
-      text: text,
-      author_name: data.author_name,
-      author_url: data.author_url,
-      images: []
-    });
+    // Forward the response
+    res.json(data);
   } catch (error) {
     console.error('Tweet fetch error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

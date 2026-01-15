@@ -2817,8 +2817,8 @@
             tweetFeed.insertBefore(tweetCard, tweetFeed.firstChild);
             console.log('✅ Tweet card added, fetching content...');
             
-            // Fetch actual tweet content from VPS proxy - USE HTTPS
-            fetch(`https://149.28.53.76:47291/tweet?url=${encodeURIComponent(url)}`)
+            // Fetch actual tweet content via Railway server proxy
+            fetch(`/api/tweet?url=${encodeURIComponent(url)}`)
                 .then(response => {
                     if (!response.ok) throw new Error('Failed to fetch tweet');
                     return response.json();
