@@ -2622,10 +2622,10 @@
     }
     </style>
 
-    <!-- Socket.IO Client Library -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Socket.IO Client Library - MUST LOAD FIRST -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
     
-    <!-- Solana Web3.js for transaction signing - LOAD BEFORE OTHER SCRIPTS -->
+    <!-- Solana Web3.js for transaction signing -->
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js" crossorigin="anonymous"></script>
     
     <!-- bs58 library - INLINE VERSION to avoid CDN issues -->
