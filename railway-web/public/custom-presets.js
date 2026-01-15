@@ -250,7 +250,7 @@
         }
     });
     
-    // Keybind listener
+    // Keybind listener - WITH INSTANT DEPLOY
     document.addEventListener('keydown', function(e) {
         if (!lastSelectedText) return;
         
@@ -269,7 +269,19 @@
         if (preset) {
             e.preventDefault();
             console.log('🎯 Keybind triggered:', keybind, 'for preset:', preset.name);
-            applyPreset(preset, lastSelectedText);
+            
+            // Apply preset first
+            applyPreset(preset, lastSelectedText).then(() => {
+                // INSTANT DEPLOY - trigger the deploy button after preset applied
+                setTimeout(() => {
+                    const deployBtn = document.getElementById('mainBtn');
+                    if (deployBtn) {
+                        console.log('⚡ AUTO-DEPLOYING with preset:', preset.name);
+                        deployBtn.click();
+                        window.showToast('⚡ DEPLOYED!', `${preset.name} → ${lastSelectedText}`, 'success');
+                    }
+                }, 100); // Small delay to ensure form is filled
+            });
         }
     });
     
@@ -520,20 +532,40 @@
             });
         }
         
-        // Keybind capture
+        // Keybind capture - IMPROVED FOR SIMULTANEOUS KEY PRESSES
         const setKeybindBtn = document.getElementById('setKeybindBtn');
         const clearKeybindBtn = document.getElementById('clearKeybindBtn');
         const keybindDisplay = document.getElementById('keybindDisplay');
         
         if (setKeybindBtn && keybindDisplay) {
             setKeybindBtn.addEventListener('click', () => {
-                keybindDisplay.textContent = 'Press any key...';
+                keybindDisplay.textContent = 'Press any key combo now...';
                 keybindDisplay.classList.add('capturing');
+                keybindDisplay.style.background = 'rgba(34, 197, 94, 0.2)';
+                keybindDisplay.style.color = '#22c55e';
+                
+                // Track pressed keys for simultaneous detection
+                let pressedKeys = new Set();
+                let captureTimeout = null;
                 
                 const captureHandler = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     
+                    // Don't capture modifier-only keys
+                    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+                        // Show preview while holding modifiers
+                        const modifiers = [];
+                        if (e.ctrlKey) modifiers.push('Ctrl');
+                        if (e.altKey) modifiers.push('Alt');
+                        if (e.shiftKey) modifiers.push('Shift');
+                        if (modifiers.length > 0) {
+                            keybindDisplay.textContent = modifiers.join('+') + '+...';
+                        }
+                        return;
+                    }
+                    
+                    // Build keybind string with ALL modifiers
                     const modifiers = [];
                     if (e.ctrlKey) modifiers.push('Ctrl');
                     if (e.altKey) modifiers.push('Alt');
@@ -542,9 +574,12 @@
                     const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
                     const keybind = modifiers.length > 0 ? modifiers.join('+') + '+' + key : key;
                     
-                    keybindDisplay.textContent = keybind;
+                    // Show captured keybind immediately
+                    keybindDisplay.textContent = keybind + ' ✓';
                     keybindDisplay.classList.remove('capturing');
                     keybindDisplay.classList.add('set');
+                    keybindDisplay.style.background = '';
+                    keybindDisplay.style.color = '';
                     
                     // Store keybind
                     addForm.dataset.keybind = keybind;
@@ -554,10 +589,32 @@
                         clearKeybindBtn.style.display = 'inline-block';
                     }
                     
+                    // Remove listeners
                     document.removeEventListener('keydown', captureHandler, true);
+                    document.removeEventListener('keyup', keyupHandler, true);
+                    
+                    console.log('✅ Keybind captured:', keybind);
+                };
+                
+                const keyupHandler = (e) => {
+                    // Cancel if user releases all keys without pressing a main key
+                    if (!e.ctrlKey && !e.altKey && !e.shiftKey) {
+                        clearTimeout(captureTimeout);
+                        captureTimeout = setTimeout(() => {
+                            if (keybindDisplay.classList.contains('capturing')) {
+                                keybindDisplay.textContent = 'Cancelled - try again';
+                                keybindDisplay.classList.remove('capturing');
+                                keybindDisplay.style.background = '';
+                                keybindDisplay.style.color = '';
+                                document.removeEventListener('keydown', captureHandler, true);
+                                document.removeEventListener('keyup', keyupHandler, true);
+                            }
+                        }, 500);
+                    }
                 };
                 
                 document.addEventListener('keydown', captureHandler, true);
+                document.addEventListener('keyup', keyupHandler, true);
             });
         }
         
