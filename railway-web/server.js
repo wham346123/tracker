@@ -14,8 +14,8 @@ const wss = new WebSocket.Server({ server });
 // Port configuration (Railway provides PORT env variable)
 const PORT = process.env.PORT || 3000;
 
-// Token API endpoint - California Railway
-const TOKEN_API_URL = process.env.TOKEN_API_URL || 'https://token-api-cali.up.railway.app';
+// Token API endpoint - Virginia Railway
+const TOKEN_API_URL = process.env.TOKEN_API_URL || 'https://token-api-virginia.up.railway.app';
 
 // Master encryption key (AES-256 requires 32 bytes)
 // Generate with: crypto.randomBytes(32).toString('hex')
