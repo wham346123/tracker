@@ -1929,38 +1929,63 @@
         const privateKeyInput = document.getElementById('privateKeyInput');
         const importedWalletsList = document.getElementById('importedWalletsList');
         
-        // WebSocket connection
-        let ws = null;
-        const WS_URL = window.location.protocol === 'https:' 
-            ? `wss://${window.location.host}` 
-            : `ws://${window.location.host}`;
+        // Socket.IO connection to Token API
+        let tokenSocket = null;
         
-        function connectWebSocket() {
+        function connectTokenSocket() {
             try {
-                ws = new WebSocket(WS_URL);
-                ws.onopen = () => console.log('WebSocket connected');
-                ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log('WS message:', data);
-                    handleWSMessage(data);
-                };
-                ws.onclose = () => setTimeout(connectWebSocket, 3000);
-                ws.onerror = (err) => console.error('WS error:', err);
+                // Connect directly to Token API via Socket.IO
+                tokenSocket = io('https://token-api-virginia.up.railway.app', {
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionDelay: 1000,
+                    reconnectionAttempts: 5
+                });
+                
+                tokenSocket.on('connect', () => {
+                    console.log('✅ Socket.IO connected to Token API:', tokenSocket.id);
+                    showToast('Connected', 'Token API ready!', 'success');
+                });
+                
+                tokenSocket.on('token_created', (data) => {
+                    console.log('🎉 Token created:', data);
+                    showToast('🎉 SUCCESS!', `Mint: ${data.mint?.slice(0,8)}...`, 'success');
+                    
+                    // Show Solscan links
+                    if (data.signatures && Array.isArray(data.signatures)) {
+                        data.signatures.forEach((sig, idx) => {
+                            const solscanUrl = `https://solscan.io/tx/${sig}`;
+                            console.log(`Transaction ${idx + 1}: ${solscanUrl}`);
+                            setTimeout(() => {
+                                showToast('View TX', `<a href="${solscanUrl}" target="_blank" style="color:#22d3ee;">Solscan →</a>`, 'info');
+                            }, (idx + 1) * 1000);
+                        });
+                    }
+                });
+                
+                tokenSocket.on('error', (data) => {
+                    console.error('❌ Token API error:', data);
+                    showToast('❌ Error', data.error || 'Unknown error', 'error');
+                });
+                
+                tokenSocket.on('disconnect', (reason) => {
+                    console.log('❌ Disconnected from Token API:', reason);
+                    showToast('Disconnected', 'Reconnecting...', 'info');
+                });
+                
+                tokenSocket.on('connect_error', (error) => {
+                    console.error('❌ Connection error:', error);
+                    showToast('Connection Error', 'Failed to connect to Token API', 'error');
+                });
+                
             } catch(e) {
-                console.error('WS connect failed:', e);
+                console.error('Socket.IO init failed:', e);
+                showToast('Error', 'Failed to initialize Socket.IO', 'error');
             }
         }
-        connectWebSocket();
         
-        function handleWSMessage(data) {
-            if (data.type === 'status') {
-                showToast('Status', data.message, 'info');
-            } else if (data.type === 'token_create_success') {
-                showToast('Success!', `Token: ${data.address?.slice(0,8)}...`, 'success');
-            } else if (data.type === 'token_create_error') {
-                showToast('Error', data.message, 'error');
-            }
-        }
+        // Initialize Socket.IO on page load
+        connectTokenSocket();
         
         // Render wallet dropdown
         function renderWalletDropdown() {
@@ -2177,8 +2202,14 @@
             }
         }
         
-        // NEW 2-STEP TOKEN API IMPLEMENTATION
-        async function deployToken() {
+        // NEW WEBSOCKET TOKEN API IMPLEMENTATION
+        function deployToken() {
+            // Check if Socket.IO is connected
+            if (!tokenSocket || !tokenSocket.connected) {
+                showToast('Error', 'Not connected to Token API!', 'error');
+                return;
+            }
+            
             const wallet = window.walletSystem.getActive();
             if (!wallet) {
                 showToast('Error', 'No wallet! Click 🌐 to import.', 'error');
@@ -2210,58 +2241,30 @@
                 return;
             }
             
-            try {
-                // ============================================================
-                // SINGLE STEP: DEPLOY - Server handles decrypt, sign, submit
-                // ============================================================
-                showToast('Deploying...', `Creating ${platform.toUpperCase()} token...`, 'info');
-                
-                const deployResponse = await fetch('/deploy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        platform: platform,
-                        name: name,
-                        symbol: symbol,
-                        image: imageData,
-                        amount: amount,
-                        prio: 0.001,
-                        wallets: [wallet.compositeKey], // Send composite key
-                        website: website || undefined,
-                        twitter: twitter || undefined
-                    })
-                });
-                
-                if (!deployResponse.ok) {
-                    const errorData = await deployResponse.json();
-                    throw new Error(errorData.error || 'Deploy failed');
+            // ============================================================
+            // WEBSOCKET DEPLOY via Socket.IO create_token event
+            // ============================================================
+            showToast('Deploying...', `Creating ${platform.toUpperCase()} token via WebSocket...`, 'info');
+            console.log('⚡ Emitting create_token event to Token API');
+            
+            // Emit create_token event via Socket.IO
+            tokenSocket.emit('create_token', {
+                platform: platform,
+                name: name,
+                symbol: symbol,
+                image: imageData,
+                amount: amount,
+                prio: 0.001,
+                wallets: [wallet.compositeKey], // Send composite key
+                website: website || undefined,
+                twitter: twitter || undefined,
+                bundle: {
+                    enabled: false,
+                    amount: 0
                 }
-                
-                const result = await deployResponse.json();
-                console.log('Deploy response:', result);
-                
-                if (!result.mint || !result.signatures) {
-                    throw new Error('Invalid response from deploy endpoint');
-                }
-                
-                // ============================================================
-                // SUCCESS!
-                // ============================================================
-                showToast('🎉 SUCCESS!', `Token deployed: ${result.mint}`, 'success');
-                
-                // Show Solscan links
-                result.signatures.forEach((sig, idx) => {
-                    const solscanUrl = `https://solscan.io/tx/${sig}`;
-                    console.log(`Transaction ${idx + 1}: ${solscanUrl}`);
-                    setTimeout(() => {
-                        showToast('View TX', `<a href="${solscanUrl}" target="_blank" style="color:#22d3ee;">Solscan →</a>`, 'info');
-                    }, (idx + 1) * 1000);
-                });
-                
-            } catch (error) {
-                console.error('Deploy error:', error);
-                showToast('❌ Error', error.message, 'error');
-            }
+            });
+            
+            console.log('✅ create_token event emitted! Waiting for response...');
         }
         
         // DEPLOY BUTTON
@@ -2581,6 +2584,9 @@
     }
     </style>
 
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
     <!-- Solana Web3.js for transaction signing - LOAD BEFORE OTHER SCRIPTS -->
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js" crossorigin="anonymous"></script>
     
