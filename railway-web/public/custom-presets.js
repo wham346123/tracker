@@ -381,5 +381,197 @@
         editPreset: editPreset
     };
     
+    // =====================================================
+    // UI EVENT HANDLERS
+    // =====================================================
+    
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('customPresetsModal');
+        const closeBtn = document.getElementById('closeCustomPresetsModal');
+        const addPresetBtn = document.getElementById('addPresetBtn');
+        const cancelBtn = document.getElementById('cancelPresetForm');
+        const saveBtn = document.getElementById('savePresetBtn');
+        const addForm = document.getElementById('addPresetForm');
+        const listView = document.getElementById('presetsListView');
+        const presetsList = document.getElementById('presetsList');
+        
+        // Modal close handlers
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+                // Reset to list view
+                listView.style.display = 'block';
+                addForm.style.display = 'none';
+            });
+        }
+        
+        modal?.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                listView.style.display = 'block';
+                addForm.style.display = 'none';
+            }
+        });
+        
+        // Add Preset Button
+        if (addPresetBtn) {
+            addPresetBtn.addEventListener('click', () => {
+                console.log('➕ Add Preset clicked');
+                listView.style.display = 'none';
+                addForm.style.display = 'block';
+                
+                // Clear form
+                document.getElementById('presetNameInput').value = '';
+                document.getElementById('namePrefix').value = '';
+                document.getElementById('nameSuffix').value = '';
+                document.getElementById('platformSelect').value = 'default';
+                document.getElementById('tickerModeSelect').value = 'selected';
+                document.getElementById('imageTypeSelect').value = 'post';
+                document.getElementById('customTickerInput').value = '';
+                document.getElementById('customImageUrlInput').value = '';
+                document.getElementById('translateChineseCheck').checked = false;
+                document.getElementById('keybindDisplay').textContent = 'Not Set';
+                document.getElementById('keybindDisplay').classList.remove('set');
+                delete addForm.dataset.editIdx;
+                delete addForm.dataset.keybind;
+            });
+        }
+        
+        // Cancel Button
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                listView.style.display = 'block';
+                addForm.style.display = 'none';
+            });
+        }
+        
+        // Save Button
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                const name = document.getElementById('presetNameInput').value.trim();
+                const namePrefix = document.getElementById('namePrefix').value.trim();
+                const nameSuffix = document.getElementById('nameSuffix').value.trim();
+                const platform = document.getElementById('platformSelect').value;
+                const tickerMode = document.getElementById('tickerModeSelect').value;
+                const imageType = document.getElementById('imageTypeSelect').value;
+                const customTicker = document.getElementById('customTickerInput').value.trim();
+                const customImageUrl = document.getElementById('customImageUrlInput').value.trim();
+                const translateChinese = document.getElementById('translateChineseCheck').checked;
+                const keybind = addForm.dataset.keybind || '';
+                
+                if (!name) {
+                    alert('Please enter a preset name');
+                    return;
+                }
+                
+                const presetData = {
+                    name,
+                    namePrefix,
+                    nameSuffix,
+                    platform,
+                    tickerMode,
+                    imageType,
+                    customTicker,
+                    customImageUrl,
+                    translateChinese,
+                    keybind
+                };
+                
+                const editIdx = addForm.dataset.editIdx;
+                savePreset(presetData, editIdx ? parseInt(editIdx) : null);
+                
+                // Return to list view
+                listView.style.display = 'block';
+                addForm.style.display = 'none';
+                
+                // Re-render list
+                renderPresetsList(presetsList);
+                
+                window.showToast('✅ Saved!', `Preset "${name}" saved!`, 'success');
+            });
+        }
+        
+        // Ticker mode change handler
+        const tickerModeSelect = document.getElementById('tickerModeSelect');
+        const customTickerInput = document.getElementById('customTickerInput');
+        
+        if (tickerModeSelect && customTickerInput) {
+            tickerModeSelect.addEventListener('change', () => {
+                if (tickerModeSelect.value === 'custom') {
+                    customTickerInput.style.display = 'block';
+                } else {
+                    customTickerInput.style.display = 'none';
+                }
+            });
+        }
+        
+        // Image type change handler
+        const imageTypeSelect = document.getElementById('imageTypeSelect');
+        const customImageUrlInput = document.getElementById('customImageUrlInput');
+        
+        if (imageTypeSelect && customImageUrlInput) {
+            imageTypeSelect.addEventListener('change', () => {
+                if (imageTypeSelect.value === 'custom') {
+                    customImageUrlInput.style.display = 'block';
+                } else {
+                    customImageUrlInput.style.display = 'none';
+                }
+            });
+        }
+        
+        // Keybind capture
+        const setKeybindBtn = document.getElementById('setKeybindBtn');
+        const clearKeybindBtn = document.getElementById('clearKeybindBtn');
+        const keybindDisplay = document.getElementById('keybindDisplay');
+        
+        if (setKeybindBtn && keybindDisplay) {
+            setKeybindBtn.addEventListener('click', () => {
+                keybindDisplay.textContent = 'Press any key...';
+                keybindDisplay.classList.add('capturing');
+                
+                const captureHandler = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const modifiers = [];
+                    if (e.ctrlKey) modifiers.push('Ctrl');
+                    if (e.altKey) modifiers.push('Alt');
+                    if (e.shiftKey) modifiers.push('Shift');
+                    
+                    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                    const keybind = modifiers.length > 0 ? modifiers.join('+') + '+' + key : key;
+                    
+                    keybindDisplay.textContent = keybind;
+                    keybindDisplay.classList.remove('capturing');
+                    keybindDisplay.classList.add('set');
+                    
+                    // Store keybind
+                    addForm.dataset.keybind = keybind;
+                    
+                    // Show clear button
+                    if (clearKeybindBtn) {
+                        clearKeybindBtn.style.display = 'inline-block';
+                    }
+                    
+                    document.removeEventListener('keydown', captureHandler, true);
+                };
+                
+                document.addEventListener('keydown', captureHandler, true);
+            });
+        }
+        
+        if (clearKeybindBtn && keybindDisplay) {
+            clearKeybindBtn.addEventListener('click', () => {
+                keybindDisplay.textContent = 'Not Set';
+                keybindDisplay.classList.remove('set');
+                clearKeybindBtn.style.display = 'none';
+                delete addForm.dataset.keybind;
+            });
+        }
+        
+        console.log('✅ Custom Presets UI handlers attached!');
+    });
+    
     console.log('✅ Custom Presets System Loaded!');
 })();
