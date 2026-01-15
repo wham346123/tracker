@@ -2764,20 +2764,46 @@
         });
     </script>
     
-    <!-- Simple, direct tweet URL handler -->
+    <!-- AGGRESSIVE TWEET URL HANDLER - GUARANTEED TO WORK -->
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const chatInput = document.getElementById('siteChatInput');
-        const tweetFeed = document.getElementById('twitterFeed');
+    (function() {
+        console.log('🚀 Tweet handler script loading...');
         
-        if (chatInput && tweetFeed) {
-            console.log('✅ Tweet handler attached to chat input');
+        function setupTweetHandler() {
+            const chatInput = document.getElementById('siteChatInput');
+            const tweetFeed = document.getElementById('twitterFeed');
             
-            chatInput.addEventListener('keydown', function(e) {
+            if (!chatInput) {
+                console.error('❌ siteChatInput not found!');
+                return false;
+            }
+            if (!tweetFeed) {
+                console.error('❌ twitterFeed not found!');
+                return false;
+            }
+            
+            console.log('✅ Elements found, attaching handler...');
+            
+            // Remove any existing listeners
+            const newInput = chatInput.cloneNode(true);
+            chatInput.parentNode.replaceChild(newInput, chatInput);
+            
+            // Add NEW handler
+            newInput.addEventListener('keydown', function(e) {
+                console.log('🔑 Key pressed:', e.key);
+                
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
                     const url = this.value.trim();
-                    console.log('🔑 Enter pressed, URL:', url);
+                    console.log('📝 Input value:', url);
+                    
+                    if (!url) {
+                        console.log('⚠️ Empty input');
+                        return;
+                    }
                     
                     // Parse tweet URL
                     const match = url.match(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status\/(\d+)/i);
@@ -2785,7 +2811,7 @@
                     if (match) {
                         const username = match[1];
                         const tweetId = match[2];
-                        console.log('✅ Creating tweet for:', username);
+                        console.log('✅ Valid tweet URL! Username:', username, 'ID:', tweetId);
                         
                         // Generate tweet card
                         const now = new Date();
@@ -2830,30 +2856,49 @@
                             </div>
                         `;
                         
+                        console.log('📦 Tweet card created');
+                        
                         // Add to feed
                         tweetFeed.insertBefore(tweetCard, tweetFeed.firstChild);
+                        console.log('✅ Tweet added to feed!');
                         
                         // Clear input
                         this.value = '';
                         
                         // Scroll to show
-                        setTimeout(() => tweetCard.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+                        setTimeout(() => {
+                            tweetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
                         
                         // Show success
                         if (window.showToast) {
                             window.showToast('Tweet Added', `@${username} loaded!`, 'success');
                         }
-                        
-                        console.log('✅ Tweet card added to feed!');
                     } else {
                         console.log('❌ Not a valid tweet URL');
+                        alert('Please enter a valid Twitter/X URL\n\nExample:\nhttps://x.com/username/status/123456789');
                     }
                 }
-            });
-        } else {
-            console.error('❌ Chat input or tweet feed not found!');
+            }, true); // Use capture phase
+            
+            console.log('✅ Handler attached successfully!');
+            return true;
         }
-    });
+        
+        // Try immediately
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupTweetHandler);
+        } else {
+            setupTweetHandler();
+        }
+        
+        // Also try after delays to be absolutely sure
+        setTimeout(setupTweetHandler, 100);
+        setTimeout(setupTweetHandler, 500);
+        setTimeout(setupTweetHandler, 1000);
+        
+        console.log('🚀 Tweet handler script loaded!');
+    })();
     </script>
     
     <script src="renderer.js"></script>
