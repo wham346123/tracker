@@ -1934,8 +1934,18 @@
         let isSocketConnected = false;
         
         function connectTokenSocket() {
+            // Check if io is available
+            if (typeof io === 'undefined') {
+                console.error('❌ Socket.IO library not loaded yet!');
+                showToast('Error', 'Socket.IO library not loaded. Retrying...', 'error');
+                // Retry after delay
+                setTimeout(connectTokenSocket, 500);
+                return;
+            }
+            
             try {
                 console.log('🔌 Connecting to Token API via Socket.IO...');
+                console.log('✅ Socket.IO library available:', typeof io);
                 showToast('Connecting...', 'Connecting to Token API...', 'info');
                 
                 // Connect directly to Token API via Socket.IO
