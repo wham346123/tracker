@@ -15,7 +15,7 @@ const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 
 // Token API endpoint - Virginia (East) Railway for faster response
-const TOKEN_API_URL = process.env.TOKEN_API_URL || 'https://token-api-production.up.railway.app';
+const TOKEN_API_URL = process.env.TOKEN_API_URL || 'https://token-api-virginia.up.railway.app';
 
 // Master encryption key (AES-256 requires 32 bytes)
 // Generate with: crypto.randomBytes(32).toString('hex')
