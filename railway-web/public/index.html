@@ -1948,15 +1948,8 @@
                 console.log('✅ Socket.IO library available:', typeof io);
                 showToast('Connecting...', 'Connecting to Token API...', 'info');
                 
-                // Connect directly to Token API via Socket.IO
-                tokenSocket = io('https://token-api-virginia.up.railway.app', {
-                    transports: ['polling', 'websocket'], // Try polling first, then upgrade
-                    reconnection: true,
-                    reconnectionDelay: 2000,
-                    reconnectionAttempts: 10,
-                    timeout: 20000,
-                    forceNew: true
-                });
+                // Connect directly to Token API via Socket.IO - EXACT DOCS CONFIG
+                tokenSocket = io('https://token-api-virginia.up.railway.app');
                 
                 tokenSocket.on('connect', () => {
                     isSocketConnected = true;
