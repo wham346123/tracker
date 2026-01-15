@@ -2793,7 +2793,7 @@
             const avatarColor = colors[Math.floor(Math.random() * colors.length)];
             
             const tweetCard = document.createElement('div');
-            tweetCard.className = 'tweet-card';
+            tweetCard.className = 'tweet-card loading';
             tweetCard.innerHTML = `
                 <div class="tweet-header">
                     <div class="tweet-author">
@@ -2808,24 +2808,68 @@
                     <button class="tweet-deploy-btn">⚡ DEPLOY</button>
                 </div>
                 <div class="tweet-action">@${username.toLowerCase()} posted</div>
-                <div class="tweet-content">
-                    Tweet from @${username} - Click DEPLOY to use
-                </div>
+                <div class="tweet-content">Loading tweet content...</div>
                 <div style="font-size: 10px; color: #555; margin-top: 8px;">
                     📎 <a href="${url}" target="_blank" style="color: #0ea5e9; text-decoration: none;">${url}</a>
                 </div>
             `;
             
             tweetFeed.insertBefore(tweetCard, tweetFeed.firstChild);
-            console.log('✅✅✅ TWEET CARD ADDED TO FEED!');
+            console.log('✅ Tweet card added, fetching content...');
+            
+            // Fetch actual tweet content from VPS proxy
+            fetch(`http://149.28.53.76:47291/tweet?url=${encodeURIComponent(url)}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('📥 Tweet data:', data);
+                    
+                    // Update tweet content
+                    const contentEl = tweetCard.querySelector('.tweet-content');
+                    if (contentEl && data.text) {
+                        contentEl.textContent = data.text;
+                    }
+                    
+                    // Update author name if available
+                    const nameEl = tweetCard.querySelector('.author-name');
+                    if (nameEl && data.author_name) {
+                        nameEl.textContent = data.author_name;
+                    }
+                    
+                    // Update avatar with actual profile picture if available
+                    const avatarEl = tweetCard.querySelector('.author-avatar');
+                    if (avatarEl && data.profile_image) {
+                        avatarEl.innerHTML = `<img src="${data.profile_image}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+                    }
+                    
+                    // Show images if available
+                    if (data.images && data.images.length > 0) {
+                        const imagesHtml = `
+                            <div class="tweet-images" style="display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap;">
+                                ${data.images.map(img => `<img src="${img}" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover;">`).join('')}
+                            </div>
+                        `;
+                        contentEl.insertAdjacentHTML('afterend', imagesHtml);
+                    }
+                    
+                    tweetCard.classList.remove('loading');
+                    console.log('✅✅✅ TWEET CONTENT LOADED!');
+                    
+                    if (window.showToast) {
+                        window.showToast('Tweet Loaded!', `@${username}: ${data.text?.slice(0, 30)}...`, 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Failed to fetch tweet:', error);
+                    const contentEl = tweetCard.querySelector('.tweet-content');
+                    if (contentEl) {
+                        contentEl.textContent = `Tweet from @${username} - Click DEPLOY to use`;
+                    }
+                    tweetCard.classList.remove('loading');
+                });
             
             setTimeout(() => {
                 tweetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
-            
-            if (window.showToast) {
-                window.showToast('Tweet Added!', `@${username} loaded`, 'success');
-            }
         }
         
         function attachHandler() {
