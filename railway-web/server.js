@@ -4,6 +4,8 @@ const WebSocket = require('ws');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const { Keypair } = require('@solana/web3.js');
+const bs58 = require('bs58');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,8 +14,8 @@ const wss = new WebSocket.Server({ server });
 // Port configuration (Railway provides PORT env variable)
 const PORT = process.env.PORT || 3000;
 
-// Token API endpoint
-const TOKEN_API_URL = 'https://token-api.up.railway.app';
+// Token API endpoint - Virginia (East) Railway for faster response
+const TOKEN_API_URL = process.env.TOKEN_API_URL || 'https://token-api-production.up.railway.app';
 
 // Master encryption key (AES-256 requires 32 bytes)
 // Generate with: crypto.randomBytes(32).toString('hex')
@@ -71,15 +73,19 @@ function decryptPrivateKey(encryptedData) {
   }
 }
 
-// Derive public key from private key using base58 decoding
+// Derive public key from private key using Solana Keypair
 function derivePublicKey(privateKeyBase58) {
   try {
-    // This is a placeholder - actual implementation would use Solana's keypair
-    // For now, return a mock public key format
-    // In production, you'd use: const keypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58))
-    return 'DERIVED_' + crypto.createHash('sha256').update(privateKeyBase58).digest('hex').slice(0, 32);
+    // Decode the base58 private key
+    const secretKey = bs58.decode(privateKeyBase58);
+    
+    // Create keypair from secret key
+    const keypair = Keypair.fromSecretKey(secretKey);
+    
+    // Return the public key as base58 string
+    return keypair.publicKey.toBase58();
   } catch (error) {
-    throw new Error('Failed to derive public key');
+    throw new Error('Failed to derive public key: ' + error.message);
   }
 }
 
