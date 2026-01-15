@@ -98,8 +98,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// POST /import - Import wallet and return encrypted composite key
-app.post('/import', (req, res) => {
+// POST /import - Proxy to Token API to import and encrypt wallet
+app.post('/import', async (req, res) => {
   try {
     const { walletPrivateKey } = req.body;
     
@@ -112,18 +112,26 @@ app.post('/import', (req, res) => {
       return res.status(400).json({ error: 'Invalid private key format' });
     }
     
-    // Derive public key from private key
-    const publicKey = derivePublicKey(walletPrivateKey);
+    // Call Token API /import endpoint to get properly encrypted composite key
+    const response = await fetch(`${TOKEN_API_URL}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletPrivateKey })
+    });
     
-    // Encrypt the private key
-    const encryptedPrivateKey = encryptPrivateKey(walletPrivateKey);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Token API import failed: ${errorText}`);
+    }
     
-    // Create composite key: publicKey:encryptedPrivateKey
-    const compositeKey = `${publicKey}:${encryptedPrivateKey}`;
+    const result = await response.json();
     
-    console.log('✅ Wallet imported:', publicKey);
+    // Extract public key from composite for logging
+    const publicKey = result.wallet.split(':')[0];
+    console.log('✅ Wallet imported via Token API:', publicKey);
     
-    res.json({ wallet: compositeKey });
+    // Return the composite key from Token API
+    res.json({ wallet: result.wallet });
   } catch (error) {
     console.error('Import error:', error);
     res.status(500).json({ error: error.message });
