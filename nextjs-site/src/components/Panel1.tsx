@@ -1,0 +1,627 @@
+"use client";
+
+import { Trash2 } from "lucide-react";
+import { getTheme } from "@/utils/themes";
+import Image from "next/image";
+import { useState, useEffect } from "react";
+import { getDeploymentService, CreateTokenParams } from "@/services/tokenApi";
+import Toast from "./Toast";
+
+interface Wallet {
+  id: string;
+  type: 'solana' | 'evm';
+  publicKey: string;
+  privateKey: string;
+  compositeKey: string;
+  balance: number;
+  isActive: boolean;
+}
+
+interface ToastMessage {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+}
+
+interface PresetTriggerData {
+  namePrefix: string;
+  nameSuffix: string;
+  deployPlatform: string;
+  tickerMode: string;
+  imageType: string;
+  selectedText?: string;
+  tweetImageUrl?: string;
+}
+
+interface Panel1Props {
+  themeId: string;
+  activeWallet: Wallet | null;
+  presetTrigger?: PresetTriggerData | null;
+  onPresetApplied?: () => void;
+}
+
+export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied }: Panel1Props) {
+  const theme = getTheme(themeId);
+  
+  const logos = [
+    { src: '/images/pump-logo.png', alt: 'Pump' },
+    { src: '/images/bonk-logo.png', alt: 'Bonk' },
+    { src: '/images/usd1-logo.png', alt: 'USD1' },
+    { src: '/images/bags-logo.png', alt: 'Bags' },
+    { src: '/images/bnb-logo.png', alt: 'BNB' },
+    { src: '/images/jupiter-logo.png', alt: 'Jupiter' }
+  ];
+  
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [platformValues, setPlatformValues] = useState([0.001, 0.001, 0.001, 0.001, 0.001, 0.001]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [buyAmount, setBuyAmount] = useState(0.01);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<"pump" | "bonk" | "usd1">("pump");
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  
+  const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
+  const deploymentService = getDeploymentService();
+  
+  // Toast helper functions
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+  
+  const removeToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+  
+  // Clear all form fields
+  const handleClear = () => {
+    setName("");
+    setSymbol("");
+    setWebsite("");
+    setTwitter("");
+    setUploadedImage(null);
+    setBuyAmount(0.01);
+    showToast("Form cleared!", "info");
+  };
+  
+  // Auto-sync name to symbol with smart abbreviation
+  const handleNameChange = (value: string) => {
+    setName(value);
+    
+    if (value.length <= 13) {
+      setSymbol(value.toUpperCase());
+    } else {
+      // Smart abbreviation: take first letters of words or compress
+      const words = value.trim().split(/\s+/);
+      if (words.length > 1) {
+        // Use first letter of each word
+        const abbreviated = words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
+        setSymbol(abbreviated);
+      } else {
+        // Single long word - take first 13 chars
+        setSymbol(value.slice(0, 13).toUpperCase());
+      }
+    }
+  };
+  
+  // Handle drag and drop for images
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setUploadedImage(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+  
+  // Handle platform value changes
+  const handlePlatformValueChange = (index: number, value: string) => {
+    const newValues = [...platformValues];
+    newValues[index] = parseFloat(value) || 0;
+    setPlatformValues(newValues);
+  };
+  
+  // Deploy token function
+  const handleDeploy = async () => {
+    // Validation
+    if (!activeWallet) {
+      showToast("Please import a wallet first! Click the Stack button (📚) in the top right.", "error");
+      return;
+    }
+    
+    if (!name || !symbol) {
+      showToast("Please fill in Token Name and Symbol!", "error");
+      return;
+    }
+    
+    if (!uploadedImage) {
+      showToast("Please upload an image for your token!", "error");
+      return;
+    }
+    
+    if (buyAmount <= 0) {
+      showToast("Buy amount must be greater than 0!", "error");
+      return;
+    }
+    
+    setIsDeploying(true);
+    
+    try {
+      await deploymentService.connect();
+      
+      deploymentService.createToken(
+        {
+          platform: selectedPlatform,
+          name: name.trim(),
+          symbol: symbol.trim(),
+          image: uploadedImage,
+          amount: buyAmount,
+          wallets: [activeWallet.compositeKey],
+          website: website.trim() || undefined,
+          twitter: twitter.trim() || undefined,
+        },
+        (data) => {
+          // Success! Show single toast with ticker
+          showToast(
+            `Token $${symbol.trim()} Created Successfully!`,
+            "success"
+          );
+          setIsDeploying(false);
+          
+          // DON'T clear form - keep data for next deploy
+        },
+        (error) => {
+          showToast(`Deployment Failed: ${error}`, "error");
+          setIsDeploying(false);
+        }
+      );
+    } catch (error) {
+      showToast(`Failed to connect to Token API: ${error}`, "error");
+      setIsDeploying(false);
+    }
+  };
+  
+  // Handle Enter key to deploy
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !isDeploying) {
+      e.preventDefault();
+      handleDeploy();
+    }
+  };
+  
+  // Center crop image function
+  const centerCropImage = async (imageUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img');
+      // Don't set crossOrigin to avoid CORS issues
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject('Could not get canvas context');
+          return;
+        }
+        
+        // Determine the size of the square crop (use the smaller dimension)
+        const size = Math.min(img.width, img.height);
+        canvas.width = size;
+        canvas.height = size;
+        
+        // Calculate center crop coordinates
+        const startX = (img.width - size) / 2;
+        const startY = (img.height - size) / 2;
+        
+        // Draw the center-cropped image
+        ctx.drawImage(img, startX, startY, size, size, 0, 0, size, size);
+        
+        // Convert to data URL
+        resolve(canvas.toDataURL('image/png'));
+      };
+      
+      img.onerror = (error) => {
+        console.error('Image load error:', error);
+        reject('Failed to load image');
+      };
+      
+      img.src = imageUrl;
+    });
+  };
+  
+  // Generate symbol based on Ticker Mode
+  const generateSymbol = (text: string, tickerMode: string): string => {
+    const cleanText = text.trim();
+    
+    switch (tickerMode) {
+      case 'Selected Text':
+        // Use the selected text as-is (up to 13 chars)
+        return cleanText.slice(0, 13).toUpperCase();
+      
+      case 'Abbreviation':
+        // Take first letter of each word
+        const words = cleanText.split(/\s+/);
+        if (words.length > 1) {
+          return words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
+        }
+        return cleanText.slice(0, 13).toUpperCase();
+      
+      case 'First Word':
+        // Use only the first word
+        const firstWord = cleanText.split(/\s+/)[0];
+        return firstWord.slice(0, 13).toUpperCase();
+      
+      case 'Custom':
+        // For custom, just use first 4 chars + random 3 digits
+        const base = cleanText.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase();
+        const random = Math.floor(100 + Math.random() * 900);
+        return `${base}${random}`;
+      
+      default:
+        return cleanText.slice(0, 13).toUpperCase();
+    }
+  };
+  
+  // Apply preset when triggered - INSTANT BACKGROUND DEPLOY
+  useEffect(() => {
+    if (presetTrigger && onPresetApplied) {
+      console.log('📋 Applying preset:', presetTrigger);
+      
+      // Build the token data from preset (don't update visible form)
+      const baseText = presetTrigger.selectedText || '';
+      const tokenName = `${presetTrigger.namePrefix}${baseText}${presetTrigger.nameSuffix}`.trim();
+      
+      // Generate symbol using Ticker Mode
+      const tokenSymbol = generateSymbol(baseText, presetTrigger.tickerMode);
+      console.log(`🎯 Ticker Mode: ${presetTrigger.tickerMode}, Symbol: ${tokenSymbol}`);
+      
+      // Get platform
+      const platformMap: { [key: string]: "pump" | "bonk" | "usd1" } = {
+        'Pump.fun': 'pump',
+        'Raydium': 'bonk',
+        'Jupiter': 'usd1',
+        'Binance': 'bonk',
+        'USD1': 'usd1',
+        'BONK': 'bonk'
+      };
+      const deployPlatform = presetTrigger.deployPlatform !== 'Use Account Default' 
+        ? platformMap[presetTrigger.deployPlatform] || selectedPlatform
+        : selectedPlatform;
+      
+      // Handle tweet image and deploy instantly in background
+      const instantDeploy = async () => {
+        if (!activeWallet) {
+          showToast("Please import a wallet first!", "error");
+          onPresetApplied();
+          return;
+        }
+        
+        if (!tokenName || !tokenSymbol) {
+          showToast("Could not generate token name from selected text!", "error");
+          onPresetApplied();
+          return;
+        }
+        
+        let imageToUse = uploadedImage; // Use existing image if available
+        
+        // Use tweet image directly if available (avoid CORS issues with cropping)
+        if (presetTrigger.tweetImageUrl && presetTrigger.imageType === 'Image in Post') {
+          console.log('🖼️ Using tweet image directly:', presetTrigger.tweetImageUrl);
+          imageToUse = presetTrigger.tweetImageUrl;
+        }
+        
+        if (!imageToUse) {
+          showToast("No image available for deployment!", "error");
+          onPresetApplied();
+          return;
+        }
+        
+        // Deploy instantly in background
+        showToast(`Deploying $${tokenSymbol}...`, 'info');
+        setIsDeploying(true);
+        
+        try {
+          await deploymentService.connect();
+          
+          deploymentService.createToken(
+            {
+              platform: deployPlatform,
+              name: tokenName,
+              symbol: tokenSymbol,
+              image: imageToUse,
+              amount: buyAmount || 0.01,
+              wallets: [activeWallet.compositeKey],
+              website: website.trim() || undefined,
+              twitter: twitter.trim() || undefined,
+            },
+            (data) => {
+              showToast(`Token $${tokenSymbol} Created Successfully!`, "success");
+              setIsDeploying(false);
+            },
+            (error) => {
+              showToast(`Deployment Failed: ${error}`, "error");
+              setIsDeploying(false);
+            }
+          );
+        } catch (error) {
+          showToast(`Failed to connect to Token API: ${error}`, "error");
+          setIsDeploying(false);
+        }
+      };
+      
+      instantDeploy();
+      
+      // Clear the trigger
+      onPresetApplied();
+    }
+  }, [presetTrigger]);
+  
+  return (
+    <div 
+      className={`h-full ${theme.panel1Bg} flex flex-col relative ${isDragging ? 'ring-4 ring-blue-500' : ''}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Toast Container - Top Right */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
+      </div>
+      {/* Header Row - Modern & Clean */}
+      <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-slate-800/50 to-slate-900/50 backdrop-blur-sm border-b border-slate-700/50">
+        {/* Token Deploy Heading - Modern */}
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+          <span className="text-white font-bold text-sm tracking-wide">TOKEN DEPLOY</span>
+        </div>
+
+        {/* Clean Button - Minimal */}
+        <button 
+          onClick={handleClear}
+          className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg transition-all text-xs font-medium border border-red-500/20 hover:border-red-500/30"
+        >
+          <Trash2 size={14} />
+          <span>Clear</span>
+        </button>
+
+        {/* Wallet Dropdown - Truncated */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-slate-400 text-xs font-medium whitespace-nowrap">Wallet:</span>
+          <button className="flex-1 bg-slate-800/50 hover:bg-slate-700/50 text-white px-3 py-1.5 rounded-lg border border-slate-600/30 hover:border-slate-500/50 transition-all text-xs flex items-center justify-between min-w-0 backdrop-blur-sm">
+            <span className={`${activeWallet ? 'text-white' : 'text-slate-500'} truncate font-mono text-xs`}>
+              {activeWallet 
+                ? `${activeWallet.publicKey.slice(0, 4)}...${activeWallet.publicKey.slice(-4)}`
+                : 'No wallet selected'}
+            </span>
+            <svg className="w-3 h-3 flex-shrink-0 ml-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className={`flex-1 p-3 overflow-auto ${theme.panel1ContentBg}`}>
+        <div className="flex flex-col gap-2">
+          {/* Name Field */}
+          <div>
+            <input
+              type="text"
+              maxLength={32}
+              placeholder="Name"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className={`w-full ${theme.inputBg} ${theme.textPrimary} px-3 py-2 rounded-lg border ${theme.inputBorder} text-sm focus:outline-none focus:border-slate-600 placeholder-gray-500`}
+            />
+          </div>
+
+          {/* Symbol Field */}
+          <div>
+            <input
+              type="text"
+              maxLength={13}
+              placeholder="Symbol"
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+              onKeyDown={handleKeyDown}
+              className={`w-full ${theme.inputBg} ${theme.textPrimary} px-3 py-2 rounded-lg border ${theme.inputBorder} text-sm focus:outline-none focus:border-slate-600 placeholder-gray-500`}
+            />
+          </div>
+
+          {/* Website Field */}
+          <div>
+            <input
+              type="text"
+              placeholder="Website"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className={`w-full ${theme.inputBg} ${theme.textPrimary} px-3 py-2 rounded-lg border ${theme.inputBorder} text-sm focus:outline-none focus:border-slate-600 placeholder-gray-500`}
+            />
+          </div>
+
+          {/* Twitter Field */}
+          <div>
+            <input
+              type="text"
+              placeholder="Twitter (https://twitter.com/...)"
+              value={twitter}
+              onChange={(e) => setTwitter(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className={`w-full ${theme.inputBg} ${theme.textPrimary} px-3 py-2 rounded-lg border ${theme.inputBorder} text-sm focus:outline-none focus:border-slate-600 placeholder-gray-500`}
+            />
+          </div>
+
+          {/* Image Section with Drag & Drop */}
+          <div
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`w-full h-20 ${theme.inputBg} rounded-lg border-2 ${
+              isDragging ? 'border-blue-500 bg-blue-900/20' : theme.inputBorder
+            } flex items-center justify-center ${theme.textSecondary} text-xs cursor-pointer transition-colors relative overflow-hidden`}
+          >
+            {uploadedImage ? (
+              <img 
+                src={uploadedImage} 
+                alt="Uploaded" 
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span>{isDragging ? 'Drop image here...' : 'Drag & drop image or click to upload'}</span>
+            )}
+          </div>
+
+          {/* 6 Circular Indicators with Editable Values */}
+          <div className={`flex justify-around items-center py-2 ${theme.inputBg} rounded-lg border ${theme.inputBorder}`}>
+            {logos.map((logo, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 overflow-hidden">
+                  <Image 
+                    src={logo.src} 
+                    alt={logo.alt} 
+                    width={24} 
+                    height={24}
+                    className="object-contain"
+                  />
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={platformValues[i]}
+                  onChange={(e) => handlePlatformValueChange(i, e.target.value)}
+                  className="w-12 bg-slate-800 text-white text-xs font-medium text-center py-0.5 rounded border border-slate-600 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Buy Amount */}
+          <div className="mt-2">
+            <label className="text-white text-xs font-medium mb-0.5 block">Buy Amount</label>
+            <input
+              type="number"
+              step="any"
+              value={buyAmount}
+              onChange={(e) => setBuyAmount(parseFloat(e.target.value) || 0)}
+              onKeyDown={handleKeyDown}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded-2xl border-2 border-slate-500 text-sm focus:outline-none focus:border-slate-400 font-medium"
+            />
+          </div>
+
+          {/* Multi, Auto-Sell Row */}
+          <div className="flex gap-2">
+            {/* Multi Button */}
+            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
+              <span>Multi</span>
+              <span className={`${theme.inputBg} px-2 py-0.5 rounded-lg text-xs`}>1x</span>
+            </button>
+
+            {/* Auto-Sell Button */}
+            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
+              <span>Auto-Sell</span>
+              <div className="w-9 h-4 bg-gray-600 rounded-full relative">
+                <div className="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5"></div>
+              </div>
+            </button>
+          </div>
+
+          {/* Sell, Bundle Row */}
+          <div className="flex gap-2">
+            {/* Sell Button */}
+            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
+              <span>Sell</span>
+              <div className="w-9 h-4 bg-gray-600 rounded-full relative">
+                <div className="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5"></div>
+              </div>
+            </button>
+
+            {/* Bundle Button */}
+            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs transition-colors`}>
+              Bundle
+            </button>
+          </div>
+
+          {/* Letter, SOL, ASCII, Deploy Row */}
+          <div className="flex gap-1.5">
+            <button 
+              onClick={() => setSelectedPlatform("pump")}
+              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "pump" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+            >
+              LETTER
+            </button>
+            <button 
+              onClick={() => setSelectedPlatform("bonk")}
+              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "bonk" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+            >
+              SOL
+            </button>
+            <button 
+              onClick={() => setSelectedPlatform("usd1")}
+              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "usd1" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+            >
+              ASCII
+            </button>
+            <button 
+              onClick={handleDeploy}
+              disabled={isDeploying}
+              className={`flex-1 px-3 py-1.5 ${isDeploying ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white text-xs font-bold rounded-2xl border-2 border-green-500 transition-colors flex items-center justify-center gap-1`}
+            >
+              {isDeploying ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Deploying...</span>
+                </>
+              ) : (
+                <>
+                  <span>🚀</span>
+                  <span>DEPLOY</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
