@@ -1,7 +1,7 @@
 "use client";
 
 import { X, Trash2, Copy, Upload, Settings, Download, UploadCloud } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import { importWallet } from "@/services/tokenApi";
@@ -25,6 +25,7 @@ interface CustomPreset {
   tickerMode: string;
   imageType: string;
   keybind: string;
+  customImageUrl?: string;
 }
 
 interface DeploySettingsModalProps {
@@ -57,6 +58,37 @@ export default function DeploySettingsModal({ isOpen, onClose, onWalletChange, p
     imageType: 'Image in Post',
     keybind: ''
   });
+
+  // Insta-Deploy settings - Load from localStorage
+  const [primaryKeybind, setPrimaryKeybind] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('insta-deploy-primary') || "Ctrl + X";
+    }
+    return "Ctrl + X";
+  });
+  const [secondaryKeybind, setSecondaryKeybind] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('insta-deploy-secondary') || "";
+    }
+    return "";
+  });
+  const [doubleClickEnabled, setDoubleClickEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('insta-deploy-double-click') === 'true';
+    }
+    return false;
+  });
+  const [isCapturingPrimary, setIsCapturingPrimary] = useState(false);
+  const [isCapturingSecondary, setIsCapturingSecondary] = useState(false);
+
+  // Save settings to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('insta-deploy-primary', primaryKeybind);
+      localStorage.setItem('insta-deploy-secondary', secondaryKeybind);
+      localStorage.setItem('insta-deploy-double-click', String(doubleClickEnabled));
+    }
+  }, [primaryKeybind, secondaryKeybind, doubleClickEnabled]);
 
   if (!isOpen) return null;
 
@@ -173,59 +205,46 @@ export default function DeploySettingsModal({ isOpen, onClose, onWalletChange, p
   return (
     <>
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-        <div className="bg-gray-900 rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden flex border border-gray-800">
-          {/* Sidebar */}
-          <div className="w-64 bg-black border-r border-gray-800 overflow-y-auto">
-            <div className="p-4 border-b border-gray-800">
-              <h2 className="text-xl font-bold text-white">Deploy Settings</h2>
+        <div className="bg-gray-900 rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-800">
+          {/* Header with Horizontal Tabs */}
+          <div className="border-b border-gray-800">
+            <div className="flex items-center justify-between px-6 py-4">
+              <h2 className="text-2xl font-bold text-white">Deploy Settings</h2>
+              <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                <X size={28} />
+              </button>
             </div>
-            <nav className="p-2">
+            
+            {/* Horizontal Tab Navigation */}
+            <div className="flex gap-1 px-4 overflow-x-auto">
               {[
-                { id: 'general', label: 'General', icon: '🏠' },
                 { id: 'wallets', label: 'Wallets', icon: '💼' },
                 { id: 'claim-fees', label: 'Claim Fees', icon: '💰' },
                 { id: 'auto-deploy', label: 'Auto-Deploy', icon: '⚡' },
                 { id: 'insta-deploy', label: 'Insta-Deploy', icon: '📱' },
                 { id: 'extensions', label: 'Extensions', icon: '🔌' },
-                { id: 'custom-presets', label: 'Custom Presets', icon: '📋' },
-                { id: 'preset-buttons', label: 'Preset Buttons', icon: '🔘' },
-                { id: 'whitelists', label: 'Whitelists', icon: '👥' },
-                { id: 'image-settings', label: 'Image Settings', icon: '🖼️' },
-                { id: 'referral', label: 'Referral', icon: '🔗' },
-                { id: 'advanced', label: 'Advanced', icon: '⚙️' }
+                { id: 'custom-presets', label: 'Custom Presets', icon: '📋' }
               ].map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                     activeTab === item.id
-                      ? 'bg-gray-800 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      ? 'text-white border-blue-500'
+                      : 'text-gray-400 border-transparent hover:text-white'
                   }`}
                 >
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
                 </button>
               ))}
-            </nav>
+            </div>
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <h3 className="text-2xl font-bold text-white">
-                {activeTab === 'wallets' && 'Wallet Management'}
-                {activeTab === 'general' && 'General Settings'}
-                {activeTab !== 'wallets' && activeTab !== 'general' && activeTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-              </h3>
-              <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-                <X size={28} />
-              </button>
-            </div>
+          <div className="flex-1 overflow-y-auto">
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="p-8">
               {activeTab === 'wallets' && (
                 <div className="space-y-6">
                   {/* Import Wallet Button */}
@@ -477,7 +496,206 @@ export default function DeploySettingsModal({ isOpen, onClose, onWalletChange, p
                 </div>
               )}
 
-              {activeTab !== 'wallets' && activeTab !== 'custom-presets' && (
+              {activeTab === 'insta-deploy' && (
+                <div className="max-w-3xl mx-auto space-y-8">
+                  {/* Auto-Deploy Keybind Section */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-white text-center mb-3">Auto-Deploy Keybind</h3>
+                    <p className="text-gray-400 text-center italic mb-6">
+                      Keyboard shortcut or mouse button for quick deploy with selected text
+                    </p>
+                    
+                    <div className="flex items-center gap-4 justify-center">
+                      <button
+                        onClick={() => {
+                          setIsCapturingPrimary(true);
+                          const handleKeyPress = (e: KeyboardEvent) => {
+                            e.preventDefault();
+                            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+                            
+                            const modifiers = [];
+                            if (e.ctrlKey) modifiers.push('Ctrl');
+                            if (e.altKey) modifiers.push('Alt');
+                            if (e.shiftKey) modifiers.push('Shift');
+                            if (e.metaKey) modifiers.push('Meta');
+                            
+                            const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                            const keybind = modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+                            setPrimaryKeybind(keybind);
+                            setIsCapturingPrimary(false);
+                            document.removeEventListener('keydown', handleKeyPress);
+                          };
+                          document.addEventListener('keydown', handleKeyPress);
+                          setTimeout(() => {
+                            if (isCapturingPrimary) {
+                              setIsCapturingPrimary(false);
+                              document.removeEventListener('keydown', handleKeyPress);
+                            }
+                          }, 5000);
+                        }}
+                        className={`px-8 py-4 rounded-lg text-lg font-mono font-bold transition-all ${
+                          isCapturingPrimary 
+                            ? 'bg-blue-600 text-white animate-pulse' 
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        {isCapturingPrimary ? 'Press any key...' : primaryKeybind}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setIsCapturingPrimary(true);
+                          const handleKeyPress = (e: KeyboardEvent) => {
+                            e.preventDefault();
+                            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+                            
+                            const modifiers = [];
+                            if (e.ctrlKey) modifiers.push('Ctrl');
+                            if (e.altKey) modifiers.push('Alt');
+                            if (e.shiftKey) modifiers.push('Shift');
+                            if (e.metaKey) modifiers.push('Meta');
+                            
+                            const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                            const keybind = modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+                            setPrimaryKeybind(keybind);
+                            setIsCapturingPrimary(false);
+                            document.removeEventListener('keydown', handleKeyPress);
+                          };
+                          document.addEventListener('keydown', handleKeyPress);
+                        }}
+                        className="px-6 py-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Change Keybind
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Secondary Keybind Section */}
+                  <div>
+                    <p className="text-gray-400 text-center italic mb-6">
+                      Secondary keyboard shortcut or mouse button for quick deploy
+                    </p>
+                    
+                    <div className="flex items-center gap-4 justify-center">
+                      <button
+                        onClick={() => {
+                          setIsCapturingSecondary(true);
+                          const handleKeyPress = (e: KeyboardEvent) => {
+                            e.preventDefault();
+                            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+                            
+                            const modifiers = [];
+                            if (e.ctrlKey) modifiers.push('Ctrl');
+                            if (e.altKey) modifiers.push('Alt');
+                            if (e.shiftKey) modifiers.push('Shift');
+                            if (e.metaKey) modifiers.push('Meta');
+                            
+                            const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                            const keybind = modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+                            setSecondaryKeybind(keybind);
+                            setIsCapturingSecondary(false);
+                            document.removeEventListener('keydown', handleKeyPress);
+                          };
+                          document.addEventListener('keydown', handleKeyPress);
+                          setTimeout(() => {
+                            if (isCapturingSecondary) {
+                              setIsCapturingSecondary(false);
+                              document.removeEventListener('keydown', handleKeyPress);
+                            }
+                          }, 5000);
+                        }}
+                        className={`px-8 py-4 rounded-lg text-lg font-mono font-bold transition-all ${
+                          isCapturingSecondary 
+                            ? 'bg-blue-600 text-white animate-pulse' 
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        {isCapturingSecondary ? 'Press any key...' : (secondaryKeybind || 'None')}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setIsCapturingSecondary(true);
+                          const handleKeyPress = (e: KeyboardEvent) => {
+                            e.preventDefault();
+                            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+                            
+                            const modifiers = [];
+                            if (e.ctrlKey) modifiers.push('Ctrl');
+                            if (e.altKey) modifiers.push('Alt');
+                            if (e.shiftKey) modifiers.push('Shift');
+                            if (e.metaKey) modifiers.push('Meta');
+                            
+                            const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                            const keybind = modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+                            setSecondaryKeybind(keybind);
+                            setIsCapturingSecondary(false);
+                            document.removeEventListener('keydown', handleKeyPress);
+                          };
+                          document.addEventListener('keydown', handleKeyPress);
+                        }}
+                        className="px-6 py-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Change Keybind
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Double-click to Deploy Section */}
+                  <div className="border-t border-gray-700 pt-8">
+                    <h3 className="text-2xl font-bold text-white text-center mb-3">Double-click to Deploy</h3>
+                    <p className="text-gray-400 text-center italic mb-6">
+                      Automatically deploy when you double-click on selected text
+                    </p>
+                    
+                    <div className="flex items-center justify-center gap-4">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={doubleClickEnabled}
+                          onChange={(e) => setDoubleClickEnabled(e.target.checked)}
+                          className="w-6 h-6 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 cursor-pointer"
+                        />
+                        <span className="text-white text-lg font-medium">Enable double-click deploy</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Info Box */}
+                  <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-6 mt-8">
+                    <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      How It Works
+                    </h4>
+                    <ul className="text-gray-300 space-y-2 text-sm">
+                      <li className="flex gap-2">
+                        <span className="text-blue-400">•</span>
+                        <span>Highlight text from any tweet in the tracker panel</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-blue-400">•</span>
+                        <span>Press your keybind or double-click to instantly deploy</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-blue-400">•</span>
+                        <span>One word (e.g., "charlie") → Name: "charlie", Ticker: "CHARLIE"</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-blue-400">•</span>
+                        <span>Multiple words → Auto-generates name/ticker using abbreviation logic</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-blue-400">•</span>
+                        <span>Automatically pulls tweet link and image for deployment</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {activeTab !== 'wallets' && activeTab !== 'custom-presets' && activeTab !== 'insta-deploy' && (
                 <div className="text-center text-gray-400 py-12">
                   <p>Content for {activeTab} will be added here</p>
                 </div>
@@ -579,6 +797,21 @@ export default function DeploySettingsModal({ isOpen, onClose, onWalletChange, p
                 <option>Custom Image</option>
               </select>
             </div>
+
+            {/* Custom Image URL - Only show when Custom Image is selected */}
+            {newPreset.imageType === 'Custom Image' && (
+              <div className="mb-4">
+                <label className="text-white text-sm font-medium mb-2 block">Custom Image URL</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/image.png"
+                  value={newPreset.customImageUrl || ''}
+                  onChange={(e) => setNewPreset({...newPreset, customImageUrl: e.target.value})}
+                  className="w-full bg-gray-900 text-white px-3 py-2 rounded border border-gray-700 text-sm focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-gray-500 text-xs mt-1">Enter a direct URL to an image file</p>
+              </div>
+            )}
 
             {/* Keybind */}
             <div className="mb-6">

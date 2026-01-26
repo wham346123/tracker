@@ -3,9 +3,10 @@
 import { Trash2 } from "lucide-react";
 import { getTheme } from "@/utils/themes";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getDeploymentService, CreateTokenParams } from "@/services/tokenApi";
 import Toast from "./Toast";
+import { generatePresetImage } from "@/utils/imageGenerator";
 
 interface Wallet {
   id: string;
@@ -31,6 +32,8 @@ interface PresetTriggerData {
   imageType: string;
   selectedText?: string;
   tweetImageUrl?: string;
+  tweetLink?: string;
+  customImageUrl?: string;
 }
 
 interface Panel1Props {
@@ -38,9 +41,14 @@ interface Panel1Props {
   activeWallet: Wallet | null;
   presetTrigger?: PresetTriggerData | null;
   onPresetApplied?: () => void;
+  deployedImageUrl?: string | null;
+  deployedTwitterUrl?: string | null;
+  onImageDeployed?: () => void;
+  onTwitterDeployed?: () => void;
+  clearTrigger?: number; // When this changes, silently clear all fields
 }
 
-export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied }: Panel1Props) {
+export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied, deployedImageUrl, deployedTwitterUrl, onImageDeployed, onTwitterDeployed, clearTrigger }: Panel1Props) {
   const theme = getTheme(themeId);
   
   const logos = [
@@ -67,24 +75,24 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
   const deploymentService = getDeploymentService();
   
-  // Toast helper functions
-  const showToast = (message: string, type: "success" | "error" | "info") => {
+  // Toast helper functions - wrapped in useCallback
+  const showToast = useCallback((message: string, type: "success" | "error" | "info") => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
-  };
+  }, []);
   
   const removeToast = (id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
   
-  // Clear all form fields
+  // Clear all form fields (except buy amount - that persists)
   const handleClear = () => {
     setName("");
     setSymbol("");
     setWebsite("");
     setTwitter("");
     setUploadedImage(null);
-    setBuyAmount(0.01);
+    // Don't reset buyAmount - it persists
     showToast("Form cleared!", "info");
   };
   
@@ -151,8 +159,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     setPlatformValues(newValues);
   };
   
-  // Deploy token function
-  const handleDeploy = async () => {
+  // Deploy token function - wrapped in useCallback for global Enter handler
+  const handleDeploy = useCallback(async () => {
     // Validation
     if (!activeWallet) {
       showToast("Please import a wallet first! Click the Stack button (📚) in the top right.", "error");
@@ -209,7 +217,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  };
+  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, website, twitter, deploymentService, showToast]);
   
   // Handle Enter key to deploy
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -291,6 +299,73 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     }
   };
   
+  // Handle clear trigger - silently clear all fields (no toast, buy amount persists)
+  useEffect(() => {
+    if (clearTrigger && clearTrigger > 0) {
+      console.log('🧹 Silent clear triggered');
+      setName("");
+      setSymbol("");
+      setWebsite("");
+      setTwitter("");
+      setUploadedImage(null);
+      // Don't reset buyAmount - it persists
+    }
+  }, [clearTrigger]);
+  
+  // Handle deployed image from Panel3
+  useEffect(() => {
+    if (deployedImageUrl && onImageDeployed) {
+      console.log('🖼️ Deploying image from tweet:', deployedImageUrl);
+      setUploadedImage(deployedImageUrl);
+      onImageDeployed();
+    }
+  }, [deployedImageUrl, onImageDeployed]);
+  
+  // Handle deployed Twitter URL from Panel3 - 0MS DELAY (synchronous)
+  useEffect(() => {
+    if (deployedTwitterUrl && onTwitterDeployed) {
+      console.log('🔗 Deploying Twitter URL:', deployedTwitterUrl);
+      setTwitter(deployedTwitterUrl);
+      console.log('✅ Twitter field filled via React props');
+      onTwitterDeployed(); // Clear the state immediately
+    }
+  }, [deployedTwitterUrl, onTwitterDeployed]);
+  
+  // Global Enter key handler for INSTANT deployment when Name and Ticker are filled
+  useEffect(() => {
+    const handleGlobalEnter = (e: KeyboardEvent) => {
+      // Only trigger if Enter is pressed
+      if (e.key !== 'Enter') return;
+      
+      // Don't trigger if already deploying
+      if (isDeploying) return;
+      
+      // Check if Name and Symbol are filled (minimum requirements)
+      if (!name.trim() || !symbol.trim()) return;
+      
+      // Check if we have an image
+      if (!uploadedImage) return;
+      
+      // Check if we have a wallet
+      if (!activeWallet) return;
+      
+      // Prevent default Enter behavior
+      e.preventDefault();
+      
+      // INSTANT DEPLOY - trigger the deploy button
+      console.log('⚡ INSTANT DEPLOY triggered via Enter key!');
+      handleDeploy();
+    };
+    
+    // Add global event listener
+    document.addEventListener('keydown', handleGlobalEnter);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleGlobalEnter);
+    };
+  }, [name, symbol, uploadedImage, activeWallet, isDeploying, handleDeploy]);
+  
   // Apply preset when triggered - INSTANT BACKGROUND DEPLOY
   useEffect(() => {
     if (presetTrigger && onPresetApplied) {
@@ -337,6 +412,25 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
         if (presetTrigger.tweetImageUrl && presetTrigger.imageType === 'Image in Post') {
           console.log('🖼️ Using tweet image directly:', presetTrigger.tweetImageUrl);
           imageToUse = presetTrigger.tweetImageUrl;
+        } 
+        // Generate image for non-"Image in Post" types
+        else if (presetTrigger.imageType && presetTrigger.imageType !== 'Image in Post') {
+          try {
+            console.log(`🎨 Generating ${presetTrigger.imageType} for: ${baseText}`);
+            imageToUse = await generatePresetImage(
+              presetTrigger.imageType,
+              baseText,
+              presetTrigger.customImageUrl,
+              presetTrigger.deployPlatform
+            );
+            console.log('✅ Image generated successfully!');
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            console.error('❌ Image generation failed:', errorMsg);
+            showToast(`Image generation failed: ${errorMsg}`, "error");
+            onPresetApplied();
+            return;
+          }
         }
         
         if (!imageToUse) {
@@ -345,8 +439,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           return;
         }
         
-        // Deploy instantly in background
-        showToast(`Deploying $${tokenSymbol}...`, 'info');
+        // Deploy instantly in background (no delay toast)
         setIsDeploying(true);
         
         try {
@@ -361,7 +454,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               amount: buyAmount || 0.01,
               wallets: [activeWallet.compositeKey],
               website: website.trim() || undefined,
-              twitter: twitter.trim() || undefined,
+              twitter: presetTrigger.tweetLink || twitter.trim() || undefined,
             },
             (data) => {
               showToast(`Token $${tokenSymbol} Created Successfully!`, "success");

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Panel1 from "./Panel1";
 import Panel3 from "./Panel3";
 import { Filter, Settings, Home, Layers } from "lucide-react";
 import SettingsModal from "./SettingsModal";
 import DeploySettingsModal from "./DeploySettingsModal";
 import { getTheme } from "@/utils/themes";
+import { useJ7Feed } from "@/hooks/useJ7Feed";
+import { generatePresetImage } from "@/utils/imageGenerator";
+
+// J7Tracker JWT Token
+const J7_JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Im5vbGFuIiwiaXAiOiI1MC4xMjYuMTMxLjIzMCIsInR5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NjkxOTI4MDcsImV4cCI6MTc2OTc5NzYwN30.vCBXyP-S-CTe2n3z2nbvF8WFnuSJJqZme_AiYRAikXM';
 
 interface Wallet {
   id: string;
@@ -20,6 +25,7 @@ interface Wallet {
 
 interface Tweet {
   id: string;
+  twitterStatusId?: string; // Actual Twitter status ID for URL construction
   username: string;
   displayName: string;
   handle: string;
@@ -29,8 +35,23 @@ interface Tweet {
   imageUrl?: string;
   profilePic: string;
   highlightColor?: string;
+  isRetweet?: boolean;
+  isReply?: boolean;
+  isQuote?: boolean;
+  tweetType?: string;
+  platform?: 'twitter' | 'truthsocial' | 'x';
+  media?: Array<{ type: 'image' | 'video' | 'gif'; url: string }>;
+  originalAuthorHandle?: string;
+  quotedTweet?: Tweet;
+  repliedToTweet?: Tweet;
+  linkPreviews?: Array<{
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    domain?: string;
+  }>;
 }
-
 interface CustomNotification {
   id: string;
   username: string;
@@ -56,6 +77,7 @@ interface CustomPreset {
   tickerMode: string;
   imageType: string;
   keybind: string;
+  customImageUrl?: string;
 }
 
 interface PresetTriggerData {
@@ -66,6 +88,8 @@ interface PresetTriggerData {
   imageType: string;
   selectedText?: string;
   tweetImageUrl?: string;
+  tweetLink?: string;
+  customImageUrl?: string;
 }
 
 export default function ResizablePanels() {
@@ -106,11 +130,548 @@ export default function ResizablePanels() {
   // Custom Presets state
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([]);
   const [presetTrigger, setPresetTrigger] = useState<PresetTriggerData | null>(null);
+  const [deployedImageUrl, setDeployedImageUrl] = useState<string | null>(null);
+  const [deployedTwitterUrl, setDeployedTwitterUrl] = useState<string | null>(null);
+  const [clearTrigger, setClearTrigger] = useState<number>(0); // Trigger to clear Panel1
   
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   
+  // Use ref to avoid stale closures in callbacks
+  const customNotificationsRef = useRef(customNotifications);
+  useEffect(() => {
+    customNotificationsRef.current = customNotifications;
+  }, [customNotifications]);
+  
   const theme = getTheme(currentTheme);
+
+  // Play notification sound - memoized
+  const playNotificationSound = useCallback((soundName: string) => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+    
+    switch(soundName) {
+      case "Beep": oscillator.frequency.setValueAtTime(800, audioContext.currentTime); oscillator.type = "sine"; break;
+      case "Ding": oscillator.frequency.setValueAtTime(1200, audioContext.currentTime); oscillator.type = "sine"; break;
+      case "Chime": oscillator.frequency.setValueAtTime(1000, audioContext.currentTime); oscillator.type = "triangle"; break;
+      case "Coin": oscillator.frequency.setValueAtTime(1500, audioContext.currentTime); oscillator.type = "square"; break;
+      case "Buzz": oscillator.frequency.setValueAtTime(200, audioContext.currentTime); oscillator.type = "sawtooth"; break;
+      case "Harsh Buzz": oscillator.frequency.setValueAtTime(150, audioContext.currentTime); oscillator.type = "sawtooth"; break;
+      case "Electric Shock": oscillator.frequency.setValueAtTime(100, audioContext.currentTime); oscillator.type = "square"; break;
+      case "Metal Clang": oscillator.frequency.setValueAtTime(2000, audioContext.currentTime); oscillator.type = "square"; break;
+      case "Chainsaw": oscillator.frequency.setValueAtTime(80, audioContext.currentTime); oscillator.type = "sawtooth"; break;
+      case "Destroyer": oscillator.frequency.setValueAtTime(50, audioContext.currentTime); oscillator.type = "sawtooth"; break;
+      default: oscillator.frequency.setValueAtTime(600, audioContext.currentTime); oscillator.type = "sine";
+    }
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.2);
+  }, []);
+
+  // Memoized callbacks for J7Feed to prevent reconnections
+  const handleTweetReceived = useCallback((j7Tweet: any) => {
+    console.log('🔍 Processing tweet:', j7Tweet);
+    console.log('📊 Tweet structure:', JSON.stringify(j7Tweet, null, 2));
+    
+    // Extract author info (who posted/retweeted)
+    const authorData = j7Tweet.author || {};
+    
+    // For retweets/quotes, we show the POSTER's info in header, but ORIGINAL content
+    const username = authorData?.handle || 
+                     authorData?.name || 
+                     authorData?.username ||
+                     authorData?.screenName ||
+                     j7Tweet.username ||
+                     j7Tweet.handle ||
+                     j7Tweet.screenName ||
+                     'unknown';
+    
+    const displayName = authorData?.name || 
+                       authorData?.displayName ||
+                       authorData?.handle || 
+                       username;
+    
+    const profilePic = authorData?.avatar || 
+                      authorData?.profilePic || 
+                      '';
+    
+    const verified = authorData?.verified || false;
+
+    
+    const customNotif = customNotificationsRef.current.find(n => 
+      n.username.toLowerCase() === `@${username.toLowerCase()}`
+    );
+    
+    // Extract ALL media (images, videos, gifs) - check all possible locations
+    const mediaSource = j7Tweet.isRetweet ? j7Tweet.originalMedia : j7Tweet.media;
+    const media: Array<{ type: 'image' | 'video' | 'gif'; url: string }> = [];
+    
+    // Images from main media source
+    if (mediaSource?.images && Array.isArray(mediaSource.images)) {
+      mediaSource.images.forEach((img: any) => {
+        if (img && img.url) {
+          media.push({ type: 'image', url: img.url });
+        }
+      });
+    }
+    
+    // Videos from main media source
+    if (mediaSource?.videos && Array.isArray(mediaSource.videos)) {
+      mediaSource.videos.forEach((vid: any) => {
+        if (vid && (vid.url || vid.thumbnail)) {
+          media.push({ type: 'video', url: vid.url || vid.thumbnail });
+        }
+      });
+    }
+    
+    // Fallback: Check if media is directly on j7Tweet
+    if (media.length === 0 && j7Tweet.images && Array.isArray(j7Tweet.images)) {
+      j7Tweet.images.forEach((img: any) => {
+        if (img) {
+          media.push({ type: 'image', url: typeof img === 'string' ? img : img.url });
+        }
+      });
+    }
+    
+    const imageUrl = media.find(m => m.type === 'image')?.url;
+    const timestamp = j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : new Date().toISOString();
+    
+    // Extract reply information
+    const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || null;
+    
+    // Extract quoted tweet (for quote tweets/retweets)
+    let quotedTweet: Tweet | undefined;
+    if (j7Tweet.quotedTweet) {
+      const qt = j7Tweet.quotedTweet;
+      const qtMedia: Array<{ type: 'image' | 'video' | 'gif'; url: string }> = [];
+      if (qt.media?.images) {
+        qt.media.images.forEach((img: any) => qtMedia.push({ type: 'image', url: img.url }));
+      }
+      if (qt.media?.videos) {
+        qt.media.videos.forEach((vid: any) => qtMedia.push({ type: 'video', url: vid.url || vid.thumbnail }));
+      }
+      
+      quotedTweet = {
+        id: qt.id || 'quoted',
+        username: qt.author?.handle || 'unknown',
+        displayName: qt.author?.name || qt.author?.handle || 'Unknown',
+        handle: `@${qt.author?.handle || 'unknown'}`,
+        verified: qt.author?.verified || false,
+        timestamp: qt.createdAt ? new Date(qt.createdAt).toISOString() : timestamp,
+        text: qt.text || '',
+        profilePic: qt.author?.avatar || '',
+        highlightColor: undefined,
+        media: qtMedia.length > 0 ? qtMedia : undefined,
+      };
+    }
+    
+    // Extract replied-to tweet (for replies) - ULTRA ENHANCED with ALL possible fallbacks
+    let repliedToTweet: Tweet | undefined;
+    if (replyTo) {
+      const rt = replyTo;
+      console.log('🔍 FULL Reply-to data structure:', rt);
+      console.log('🔍 Reply-to JSON:', JSON.stringify(rt, null, 2));
+      console.log('🔍 Reply-to keys:', Object.keys(rt));
+      
+      // COMPREHENSIVE MEDIA EXTRACTION - check ALL possible locations
+      const rtMedia: Array<{ type: 'image' | 'video' | 'gif'; url: string }> = [];
+      
+      // Method 1: Standard media.images/videos
+      if (rt.media?.images && Array.isArray(rt.media.images)) {
+        console.log('✅ Found images in rt.media.images:', rt.media.images.length);
+        rt.media.images.forEach((img: any) => {
+          const url = img.url || img.src || img.href || img;
+          if (url) rtMedia.push({ type: 'image', url: typeof url === 'string' ? url : url.url });
+        });
+      }
+      if (rt.media?.videos && Array.isArray(rt.media.videos)) {
+        console.log('✅ Found videos in rt.media.videos:', rt.media.videos.length);
+        rt.media.videos.forEach((vid: any) => {
+          const url = vid.url || vid.src || vid.href || vid.thumbnail || vid;
+          if (url) rtMedia.push({ type: 'video', url: typeof url === 'string' ? url : url.url });
+        });
+      }
+      
+      // Method 2: Direct images/videos arrays
+      if (rt.images && Array.isArray(rt.images)) {
+        console.log('✅ Found images in rt.images:', rt.images.length);
+        rt.images.forEach((img: any) => {
+          const url = img.url || img.src || img.href || img;
+          if (url) rtMedia.push({ type: 'image', url: typeof url === 'string' ? url : url.url });
+        });
+      }
+      if (rt.videos && Array.isArray(rt.videos)) {
+        console.log('✅ Found videos in rt.videos:', rt.videos.length);
+        rt.videos.forEach((vid: any) => {
+          const url = vid.url || vid.src || vid.href || vid.thumbnail || vid;
+          if (url) rtMedia.push({ type: 'video', url: typeof url === 'string' ? url : url.url });
+        });
+      }
+      
+      // Method 3: entities.media (Twitter API format)
+      if (rt.entities?.media && Array.isArray(rt.entities.media)) {
+        console.log('✅ Found media in rt.entities.media:', rt.entities.media.length);
+        rt.entities.media.forEach((item: any) => {
+          if (item.type === 'photo' && item.media_url_https) {
+            rtMedia.push({ type: 'image', url: item.media_url_https });
+          } else if (item.type === 'video' && item.video_info?.variants) {
+            const mp4 = item.video_info.variants.find((v: any) => v.content_type === 'video/mp4');
+            if (mp4) rtMedia.push({ type: 'video', url: mp4.url });
+          }
+        });
+      }
+      
+      // Method 4: extended_entities (Twitter extended format)
+      if (rt.extended_entities?.media && Array.isArray(rt.extended_entities.media)) {
+        console.log('✅ Found media in rt.extended_entities.media:', rt.extended_entities.media.length);
+        rt.extended_entities.media.forEach((item: any) => {
+          if (item.type === 'photo' && item.media_url_https) {
+            rtMedia.push({ type: 'image', url: item.media_url_https });
+          } else if (item.type === 'video' && item.video_info?.variants) {
+            const mp4 = item.video_info.variants.find((v: any) => v.content_type === 'video/mp4');
+            if (mp4) rtMedia.push({ type: 'video', url: mp4.url });
+          }
+        });
+      }
+      
+      console.log(`📊 Total media found: ${rtMedia.length}`, rtMedia);
+      
+      // Enhanced username extraction for replied-to tweet
+      const rtUsername = rt.author?.handle || 
+                         rt.author?.username || 
+                         rt.author?.screen_name ||
+                         rt.author?.screenName ||
+                         rt.author?.name ||
+                         rt.user?.screen_name ||
+                         rt.user?.handle ||
+                         rt.user?.username ||
+                         rt.handle ||
+                         rt.username ||
+                         rt.screen_name ||
+                         rt.screenName ||
+                         'unknown';
+      
+      const rtDisplayName = rt.author?.name || 
+                           rt.author?.displayName ||
+                           rt.author?.display_name ||
+                           rt.author?.handle || 
+                           rt.user?.name ||
+                           rt.user?.displayName ||
+                           rt.name ||
+                           rt.displayName ||
+                           rtUsername;
+      
+      // ULTRA COMPREHENSIVE text extraction - check EVERY possible field
+      const rtText = rt.text || 
+                     rt.fullText || 
+                     rt.full_text ||
+                     rt.content || 
+                     rt.body ||
+                     rt.message ||
+                     rt.description ||
+                     rt.tweet?.text ||
+                     rt.tweet?.fullText ||
+                     rt.tweet?.full_text ||
+                     rt.status?.text ||
+                     rt.status?.full_text ||
+                     '';
+      
+      console.log('📝 Extracted text:', rtText);
+      
+      // COMPREHENSIVE profile pic extraction - check EVERYTHING
+      const rtProfilePic = rt.author?.avatar || 
+                          rt.author?.profilePic || 
+                          rt.author?.profile_image_url ||
+                          rt.author?.profile_image_url_https ||
+                          rt.author?.profileImageUrl ||
+                          rt.user?.avatar ||
+                          rt.user?.profilePic ||
+                          rt.user?.profile_image_url ||
+                          rt.user?.profile_image_url_https ||
+                          rt.avatar || 
+                          rt.profilePic || 
+                          rt.profile_image_url ||
+                          rt.profile_image_url_https ||
+                          rt.profileImageUrl ||
+                          '';
+      
+      repliedToTweet = {
+        id: rt.id || rt.tweetId || rt.tweet_id || 'replied',
+        username: rtUsername,
+        displayName: rtDisplayName,
+        handle: `@${rtUsername}`,
+        verified: rt.author?.verified || rt.user?.verified || rt.verified || false,
+        timestamp: rt.createdAt || rt.created_at || rt.timestamp ? new Date(rt.createdAt || rt.created_at || rt.timestamp).toISOString() : timestamp,
+        text: rtText || 'No text available',
+        profilePic: rtProfilePic,
+        highlightColor: undefined,
+        media: rtMedia.length > 0 ? rtMedia : undefined,
+      };
+      
+      console.log('✅ Converted replied-to tweet:', repliedToTweet);
+    }
+    
+    // Extract link previews
+    const linkPreviews: Array<{url: string; title?: string; description?: string; image?: string; domain?: string}> = [];
+    if (j7Tweet.links && Array.isArray(j7Tweet.links)) {
+      j7Tweet.links.forEach((link: any) => {
+        linkPreviews.push({
+          url: link.url || link.expandedUrl || '',
+          title: link.title,
+          description: link.description,
+          image: link.image || link.thumbnail,
+          domain: link.domain || new URL(link.url || link.expandedUrl || 'https://example.com').hostname,
+        });
+      });
+    }
+    
+    // For RETWEETS, create an embedded tweet for the original content
+    let retweetedTweet: Tweet | undefined;
+    let retweetOriginalAuthor: any;
+    if (j7Tweet.isRetweet || j7Tweet.type === 'RETWEET') {
+      retweetOriginalAuthor = j7Tweet.originalAuthor || j7Tweet.retweetedStatus?.author || {};
+      const originalUsername = retweetOriginalAuthor?.handle || retweetOriginalAuthor?.username || 'unknown';
+      const originalDisplayName = retweetOriginalAuthor?.name || originalUsername;
+      
+      retweetedTweet = {
+        id: j7Tweet.originalTweetId || j7Tweet.retweetedStatus?.id || 'retweeted',
+        username: originalUsername,
+        displayName: originalDisplayName,
+        handle: `@${originalUsername}`,
+        verified: retweetOriginalAuthor?.verified || false,
+        timestamp: j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : timestamp,
+        text: j7Tweet.text || j7Tweet.retweetedStatus?.text || 'No text content',
+        profilePic: retweetOriginalAuthor?.avatar || retweetOriginalAuthor?.profilePic || '',
+        highlightColor: undefined,
+        media: media.length > 0 ? media : undefined,
+      };
+    }
+    
+    const newTweet: Tweet = {
+      id: `j7-${Date.now()}-${Math.random()}`,
+      twitterStatusId: j7Tweet.id || j7Tweet.tweetId || j7Tweet.statusId, // Store actual Twitter status ID
+      username, 
+      displayName,
+      handle: `@${username}`,
+      verified, 
+      timestamp,
+      text: j7Tweet.isRetweet ? '' : (j7Tweet.text || 'No text content'), // Empty text for retweets since it's in the embedded box
+      imageUrl, 
+      profilePic,
+      highlightColor: customNotif?.color,
+      isRetweet: j7Tweet.isRetweet || j7Tweet.type === 'RETWEET' || false,
+      isReply: j7Tweet.isReply || replyTo !== null || false,
+      isQuote: j7Tweet.isQuote || j7Tweet.quotedTweet !== null || false,
+      tweetType: j7Tweet.type,
+      media: undefined, // Media goes in the retweetedTweet for retweets
+      originalAuthorHandle: j7Tweet.isRetweet && retweetOriginalAuthor?.handle ? `@${retweetOriginalAuthor.handle}` : undefined,
+      quotedTweet: retweetedTweet || quotedTweet, // Use retweetedTweet for retweets, quotedTweet for quotes
+      repliedToTweet,
+      linkPreviews: linkPreviews.length > 0 ? linkPreviews : undefined,
+    };
+    
+    console.log('✅ Converted tweet:', newTweet);
+    
+    setTweets(prev => [newTweet, ...prev]);
+    
+    if (customNotif && customNotif.sound !== "None (Highlight Only)") {
+      playNotificationSound(customNotif.sound);
+    }
+  }, [playNotificationSound]);
+
+  const handleInitialTweets = useCallback((initialTweets: any[]) => {
+    const convertedTweets: Tweet[] = initialTweets.map((j7Tweet, index) => {
+      // Same improved logic as handleTweetReceived
+      const authorData = j7Tweet.author || {};
+      const contentSource = j7Tweet.isRetweet && j7Tweet.originalAuthor ? j7Tweet.originalAuthor : j7Tweet.author;
+      
+      const username = contentSource?.handle || 
+                       contentSource?.name || 
+                       authorData?.handle || 
+                       authorData?.name || 
+                       j7Tweet.handle ||
+                       'unknown';
+      
+      const displayName = contentSource?.name || 
+                         contentSource?.handle || 
+                         authorData?.name ||
+                         username;
+      
+      const profilePic = contentSource?.avatar || 
+                        authorData?.avatar || 
+                        '';
+      
+      const verified = contentSource?.verified || authorData?.verified || false;
+      
+      const customNotif = customNotificationsRef.current.find(n => 
+        n.username.toLowerCase() === `@${username.toLowerCase()}`
+      );
+      
+      // Extract ALL media with improved fallbacks
+      const mediaSource = j7Tweet.isRetweet ? j7Tweet.originalMedia : j7Tweet.media;
+      const media: Array<{ type: 'image' | 'video' | 'gif'; url: string }> = [];
+      
+      if (mediaSource?.images && Array.isArray(mediaSource.images)) {
+        mediaSource.images.forEach((img: any) => {
+          if (img && img.url) {
+            media.push({ type: 'image', url: img.url });
+          }
+        });
+      }
+      
+      if (mediaSource?.videos && Array.isArray(mediaSource.videos)) {
+        mediaSource.videos.forEach((vid: any) => {
+          if (vid && (vid.url || vid.thumbnail)) {
+            media.push({ type: 'video', url: vid.url || vid.thumbnail });
+          }
+        });
+      }
+      
+      // Fallback for direct images
+      if (media.length === 0 && j7Tweet.images && Array.isArray(j7Tweet.images)) {
+        j7Tweet.images.forEach((img: any) => {
+          if (img) {
+            media.push({ type: 'image', url: typeof img === 'string' ? img : img.url });
+          }
+        });
+      }
+      
+      const imageUrl = media.find(m => m.type === 'image')?.url;
+      const timestamp = j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : new Date().toISOString();
+      const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || null;
+      
+      return {
+        id: `j7-init-${Date.now()}-${index}`,
+        twitterStatusId: j7Tweet.id || j7Tweet.tweetId || j7Tweet.statusId,
+        username, 
+        displayName,
+        handle: `@${username}`,
+        verified, 
+        timestamp,
+        text: j7Tweet.text || 'No text content',
+        imageUrl, 
+        profilePic,
+        highlightColor: customNotif?.color,
+        isRetweet: j7Tweet.isRetweet || j7Tweet.type === 'RETWEET' || false,
+        isReply: j7Tweet.isReply || replyTo !== null || false,
+        isQuote: j7Tweet.isQuote || j7Tweet.quotedTweet !== null || false,
+        tweetType: j7Tweet.type,
+        media: media.length > 0 ? media : undefined,
+        originalAuthorHandle: j7Tweet.isRetweet && j7Tweet.author?.handle ? `@${j7Tweet.author.handle}` : undefined,
+      };
+    });
+    
+    setTweets(prev => [...convertedTweets, ...prev]);
+  }, []);
+
+  // Handle tweet deletion
+  const handleTweetDeleted = useCallback((tweetId: string) => {
+    console.log('🗑️ Tweet deleted:', tweetId);
+    setTweets(prev => prev.filter(tweet => !tweet.id.includes(tweetId)));
+  }, []);
+
+  // Handle follow events - Create notification tweet
+  const handleFollow = useCallback((data: any) => {
+    console.log('👤 Follow event:', data);
+    
+    const follower = data.follower || data.user || {};
+    const following = data.following || data.target || {};
+    
+    const username = follower.handle || follower.username || 'someone';
+    const targetUsername = following.handle || following.username || 'someone';
+    
+    const eventTweet: Tweet = {
+      id: `follow-${Date.now()}-${Math.random()}`,
+      username: username,
+      displayName: follower.name || username,
+      handle: `@${username}`,
+      verified: follower.verified || false,
+      timestamp: new Date().toISOString(),
+      text: `Started following @${targetUsername}`,
+      profilePic: follower.avatar || '',
+      highlightColor: '#10b981', // Green
+      tweetType: 'FOLLOW',
+    };
+    
+    setTweets(prev => [eventTweet, ...prev]);
+  }, []);
+
+  // Handle unfollow events - Create notification tweet
+  const handleUnfollow = useCallback((data: any) => {
+    console.log('👤 Unfollow event:', data);
+    
+    const unfollower = data.unfollower || data.user || {};
+    const unfollowing = data.unfollowing || data.target || {};
+    
+    const username = unfollower.handle || unfollower.username || 'someone';
+    const targetUsername = unfollowing.handle || unfollowing.username || 'someone';
+    
+    const eventTweet: Tweet = {
+      id: `unfollow-${Date.now()}-${Math.random()}`,
+      username: username,
+      displayName: unfollower.name || username,
+      handle: `@${username}`,
+      verified: unfollower.verified || false,
+      timestamp: new Date().toISOString(),
+      text: `Unfollowed @${targetUsername}`,
+      profilePic: unfollower.avatar || '',
+      highlightColor: '#ef4444', // Red
+      tweetType: 'UNFOLLOW',
+    };
+    
+    setTweets(prev => [eventTweet, ...prev]);
+  }, []);
+
+  // Handle deactivation events - Create notification tweet and remove their tweets
+  const handleDeactivation = useCallback((data: any) => {
+    console.log('🚫 Account deactivated:', data);
+    
+    const user = data.user || data;
+    const username = user.handle || user.username || 'someone';
+    
+    const eventTweet: Tweet = {
+      id: `deactivation-${Date.now()}-${Math.random()}`,
+      username: username,
+      displayName: user.name || username,
+      handle: `@${username}`,
+      verified: user.verified || false,
+      timestamp: new Date().toISOString(),
+      text: 'Account has been deactivated',
+      profilePic: user.avatar || '',
+      highlightColor: '#6b7280', // Gray
+      tweetType: 'DEACTIVATION',
+    };
+    
+    // Add the deactivation notification
+    setTweets(prev => [eventTweet, ...prev]);
+    
+    // Remove all tweets from this deactivated user
+    if (username) {
+      setTimeout(() => {
+        setTweets(prev => prev.filter(tweet => 
+          tweet.handle.toLowerCase() !== `@${username.toLowerCase()}` || 
+          tweet.tweetType === 'DEACTIVATION'
+        ));
+      }, 100);
+    }
+  }, []);
+
+  // J7 Feed connection with memoized callbacks
+  const { isConnected: j7Connected, error: j7Error } = useJ7Feed({
+    jwtToken: J7_JWT_TOKEN,
+    onTweetReceived: handleTweetReceived,
+    onInitialTweets: handleInitialTweets,
+    onTweetDeleted: handleTweetDeleted,
+    onFollow: handleFollow,
+    onUnfollow: handleUnfollow,
+    onDeactivation: handleDeactivation,
+  });
 
   // Load presets from localStorage on mount
   useEffect(() => {
@@ -131,15 +692,11 @@ export default function ResizablePanels() {
     }
   }, [customPresets]);
 
-  // Global keybind listener
+  // Global keybind listener for Custom Presets
   useEffect(() => {
     const handleGlobalKeyPress = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input field
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Build the pressed keybind string
       const key = e.key.toUpperCase();
       const modifiers = [];
       if (e.ctrlKey) modifiers.push('Ctrl');
@@ -147,127 +704,128 @@ export default function ResizablePanels() {
       if (e.shiftKey) modifiers.push('Shift');
       const pressedKeybind = modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
 
-      // Find matching preset
       const matchingPreset = customPresets.find(p => p.keybind === pressedKeybind);
       
       if (matchingPreset) {
-        // Get selected text
         const selection = window.getSelection();
         const selectedText = selection?.toString().trim();
         
-        // Only proceed if there's selected text
-        if (!selectedText) {
-          console.log('❌ No text selected - keybind ignored');
-          return;
-        }
+        if (!selectedText) return;
         
-        // Find the tweet containing this selected text
         let tweetImageUrl: string | undefined = undefined;
         if (matchingPreset.imageType === 'Image in Post') {
           const tweetWithImage = tweets.find(tweet => 
             tweet.text.includes(selectedText) && tweet.imageUrl
           );
-          if (tweetWithImage) {
-            tweetImageUrl = tweetWithImage.imageUrl;
-            console.log('🖼️ Found tweet image:', tweetImageUrl);
-          }
+          if (tweetWithImage) tweetImageUrl = tweetWithImage.imageUrl;
         }
         
         e.preventDefault();
-        console.log(`🎯 Preset triggered: ${matchingPreset.name} with text: "${selectedText}"`);
-        
-        // Trigger preset application in Panel1 with selected text and image
         setPresetTrigger({
           namePrefix: matchingPreset.namePrefix,
           nameSuffix: matchingPreset.nameSuffix,
           deployPlatform: matchingPreset.deployPlatform,
           tickerMode: matchingPreset.tickerMode,
           imageType: matchingPreset.imageType,
-          selectedText: selectedText,
-          tweetImageUrl: tweetImageUrl,
+          selectedText,
+          tweetImageUrl,
+          customImageUrl: matchingPreset.customImageUrl,
         });
       }
     };
 
     document.addEventListener('keydown', handleGlobalKeyPress);
     return () => document.removeEventListener('keydown', handleGlobalKeyPress);
-  }, [customPresets]);
+  }, [customPresets, tweets]);
 
-  // Play notification sound
-  const playNotificationSound = (soundName: string) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // 50% volume
-    
-    // Different sounds with different frequencies and types
-    switch(soundName) {
-      case "Beep":
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-        oscillator.type = "sine";
-        break;
-      case "Ding":
-        oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
-        oscillator.type = "sine";
-        break;
-      case "Chime":
-        oscillator.frequency.setValueAtTime(1000, audioContext.currentTime);
-        oscillator.type = "triangle";
-        break;
-      case "Coin":
-        oscillator.frequency.setValueAtTime(1500, audioContext.currentTime);
-        oscillator.type = "square";
-        break;
-      case "Buzz":
-        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-        oscillator.type = "sawtooth";
-        break;
-      case "Harsh Buzz":
-        oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
-        oscillator.type = "sawtooth";
-        break;
-      case "Electric Shock":
-        oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
-        oscillator.type = "square";
-        break;
-      case "Metal Clang":
-        oscillator.frequency.setValueAtTime(2000, audioContext.currentTime);
-        oscillator.type = "square";
-        break;
-      case "Chainsaw":
-        oscillator.frequency.setValueAtTime(80, audioContext.currentTime);
-        oscillator.type = "sawtooth";
-        break;
-      case "Destroyer":
-        oscillator.frequency.setValueAtTime(50, audioContext.currentTime);
-        oscillator.type = "sawtooth";
-        break;
-      default:
-        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-        oscillator.type = "sine";
-    }
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.2);
-  };
+  // Global keybind listener for Insta-Deploy
+  useEffect(() => {
+    const handleInstaDeployKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger in input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Load settings from localStorage
+      const primaryKeybind = localStorage.getItem('insta-deploy-primary') || 'Ctrl + X';
+      const secondaryKeybind = localStorage.getItem('insta-deploy-secondary') || '';
+
+      // Build pressed keybind string
+      const modifiers = [];
+      if (e.ctrlKey) modifiers.push('Ctrl');
+      if (e.altKey) modifiers.push('Alt');
+      if (e.shiftKey) modifiers.push('Shift');
+      if (e.metaKey) modifiers.push('Meta');
+      
+      const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      const pressedKeybind = modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+
+      // Check if it matches primary or secondary keybind
+      const isMatch = pressedKeybind === primaryKeybind || 
+                     (secondaryKeybind && pressedKeybind === secondaryKeybind);
+
+      if (isMatch) {
+        e.preventDefault();
+        
+        // Get selected text
+        const selection = window.getSelection();
+        const selectedText = selection?.toString().trim();
+        
+        if (!selectedText) {
+          console.log('⚡ Insta-Deploy: No text selected');
+          return;
+        }
+
+        console.log('⚡ INSTA-DEPLOY triggered with text:', selectedText);
+
+        // Find the tweet containing this text
+        const matchingTweet = tweets.find(tweet => 
+          tweet.text && tweet.text.toLowerCase().includes(selectedText.toLowerCase())
+        );
+
+        // Get tweet image - fallback to profile picture if no tweet image
+        let tweetImageUrl = matchingTweet?.imageUrl || matchingTweet?.media?.[0]?.url;
+        if (!tweetImageUrl && matchingTweet?.profilePic) {
+          tweetImageUrl = matchingTweet.profilePic;
+          console.log('📸 Using profile picture as fallback:', tweetImageUrl);
+        }
+
+        // Build tweet link
+        let tweetLink: string | undefined;
+        if (matchingTweet) {
+          const username = matchingTweet.username;
+          const statusId = matchingTweet.twitterStatusId;
+          if (username && statusId) {
+            tweetLink = `https://twitter.com/${username}/status/${statusId}`;
+            console.log('🔗 Tweet link:', tweetLink);
+          }
+        }
+        
+        // Trigger deployment with "Selected Text" ticker mode
+        setPresetTrigger({
+          namePrefix: '',
+          nameSuffix: '',
+          deployPlatform: 'Use Account Default',
+          tickerMode: 'Selected Text',
+          imageType: 'Image in Post',
+          selectedText,
+          tweetImageUrl,
+          tweetLink,
+        });
+      }
+    };
+
+    document.addEventListener('keydown', handleInstaDeployKeyPress);
+    return () => document.removeEventListener('keydown', handleInstaDeployKeyPress);
+  }, [tweets]);
 
   // Fetch real tweet data using our server-side API route
   const fetchTweetData = async (tweetId: string) => {
     try {
-      // Use our Next.js API route to avoid CORS issues
       const response = await fetch(`/api/tweet?id=${tweetId}`);
-      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      
-      const data = await response.json();
-      return data;
+      return await response.json();
     } catch (error) {
       console.error('Failed to fetch tweet:', error);
       return null;
@@ -276,7 +834,6 @@ export default function ResizablePanels() {
 
   // Parse Twitter URL and create tweet
   const parseTweetUrl = async (url: string) => {
-    // Match Twitter/X URL pattern
     const twitterPattern = /(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/([^\/]+)\/status\/(\d+)/i;
     const match = url.match(twitterPattern);
     
@@ -284,25 +841,16 @@ export default function ResizablePanels() {
     
     const username = match[1];
     const tweetId = match[2];
-    
-    // Fetch real tweet data
     const tweetData = await fetchTweetData(tweetId);
     
-    if (!tweetData) {
-      return null;
-    }
+    if (!tweetData) return null;
     
-    // Only apply highlight if user is tracked in customNotifications
     const customNotif = customNotifications.find(n => 
       n.username.toLowerCase() === tweetData.handle.toLowerCase()
     );
-    const highlightColor = customNotif ? customNotif.color : undefined;
     
-    // Use timestamp + random to ensure unique keys for duplicate tweets
-    const uniqueId = `${tweetId}-${Date.now()}-${Math.random()}`;
-    
-    const newTweet: Tweet = {
-      id: uniqueId,
+    return {
+      id: `${tweetId}-${Date.now()}-${Math.random()}`,
       username: tweetData.username,
       displayName: tweetData.displayName,
       handle: tweetData.handle,
@@ -311,17 +859,15 @@ export default function ResizablePanels() {
       text: tweetData.text,
       imageUrl: tweetData.imageUrl,
       profilePic: tweetData.profilePic,
-      highlightColor: highlightColor,
+      highlightColor: customNotif?.color,
     };
-    
-    return newTweet;
   };
 
   // Handle chat input submission
   const handleChatSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && chatInput.trim()) {
       const url = chatInput.trim();
-      setChatInput(''); // Clear input immediately
+      setChatInput('');
       
       try {
         const tweet = await parseTweetUrl(url);
@@ -329,71 +875,36 @@ export default function ResizablePanels() {
         if (tweet) {
           setTweets(prev => [tweet, ...prev]);
           
-          // Play sound if notifications are configured
           const customNotif = customNotifications.find(n => 
             n.username.toLowerCase() === tweet.handle.toLowerCase()
           );
           
           if (customNotif && customNotif.sound !== "None (Highlight Only)") {
-            // Play the configured sound
             playNotificationSound(customNotif.sound);
           }
-        } else {
-          // Silently fail - either duplicate or invalid URL
-          console.log('Tweet not added - may be duplicate or invalid URL');
         }
       } catch (error) {
         console.error('Error processing tweet:', error);
-        // Silently handle errors - no alerts
       }
     }
   };
 
-  const handleButtonMouseDown = (e: React.MouseEvent, buttonId: number) => {
-    e.stopPropagation();
-    const button = buttons.find(b => b.id === buttonId);
-    if (!button) return;
-    
-    setIsDragging({ type: "button-move", id: buttonId });
-    setDragStart({ x: e.clientX - button.x, y: e.clientY - button.y });
-  };
-
-  const handleResizeMouseDown = (e: React.MouseEvent, buttonId: number) => {
-    e.stopPropagation();
-    const button = buttons.find(b => b.id === buttonId);
-    if (!button) return;
-    
-    setIsDragging({ type: "button-resize", id: buttonId });
-    setResizeStart({ width: button.width, height: button.height });
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleHeaderDividerMouseDown = (type: string) => {
-    setIsDragging({ type });
-  };
-
-  const handlePanelMouseDown = (type: string) => {
-    setIsDragging({ type });
-  };
+  const handleHeaderDividerMouseDown = (type: string) => setIsDragging({ type });
+  const handlePanelMouseDown = (type: string) => setIsDragging({ type });
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
 
-      // Handle header height resize
       if (isDragging.type === "header" && containerRef.current) {
         const container = containerRef.current;
         const containerRect = container.getBoundingClientRect();
         const mouseY = e.clientY - containerRect.top;
         const percentage = (mouseY / containerRect.height) * 100;
-        const newHeaderHeight = Math.max(3, Math.min(50, percentage));
-        setHeaderHeight(newHeaderHeight);
+        setHeaderHeight(Math.max(3, Math.min(50, percentage)));
         return;
       }
 
-      // Buttons are now locked in place - no dragging or resizing
-
-      // Handle panel resize
       if (containerRef.current) {
         const container = containerRef.current;
         const containerRect = container.getBoundingClientRect();
@@ -440,45 +951,24 @@ export default function ResizablePanels() {
 
   return (
     <div ref={containerRef} className="flex flex-col h-screen w-full overflow-hidden select-none">
-      {/* Header with draggable/resizable buttons */}
       <div className="w-full relative" style={{ height: `${headerHeight}%` }}>
         <div ref={headerRef} className={`relative h-full w-full ${theme.header} overflow-hidden`}>
           {buttons.map((button) => (
-            <div
-              key={button.id}
-              className="absolute group"
-              style={{
-                left: `${button.x}px`,
-                top: `${button.y}px`,
-                width: `${button.width}px`,
-                height: `${button.height}px`,
-              }}
-            >
+            <div key={button.id} className="absolute group" style={{ left: `${button.x}px`, top: `${button.y}px`, width: `${button.width}px`, height: `${button.height}px` }}>
               {button.id === 5 ? (
-                /* Button 5: Input Field */
-                <input
-                  type="text"
-                  placeholder="Paste Twitter URL here..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={handleChatSubmit}
-                  className="w-full h-full bg-slate-700 hover:bg-slate-600 text-white px-3 text-xs rounded-xl border-2 border-slate-500 focus:outline-none focus:border-slate-400 placeholder-gray-400"
-                />
+                <input type="text" placeholder="Paste Twitter URL here..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={handleChatSubmit}
+                  className="w-full h-full bg-slate-700 hover:bg-slate-600 text-white px-3 text-xs rounded-xl border-2 border-slate-500 focus:outline-none focus:border-slate-400 placeholder-gray-400" />
               ) : (
-                <button
-                  onClick={() => {
-                    if (button.id === 3) setIsSettingsOpen(true);
-                    if (button.id === 9) setIsDeploySettingsOpen(true);
-                  }}
-                  className={`w-full h-full ${button.id === 12 ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-medium flex items-center justify-center gap-1.5 rounded-xl border-2 ${button.id === 12 ? 'border-green-500' : 'border-slate-500'} shadow-md transition-all hover:shadow-lg ${button.id === 12 ? 'hover:border-green-400' : 'hover:border-slate-400'} cursor-pointer`}
-                >
+                <button onClick={() => { if (button.id === 3) setIsSettingsOpen(true); if (button.id === 9) setIsDeploySettingsOpen(true); }}
+                  className={`w-full h-full ${button.id === 12 ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-medium flex items-center justify-center gap-1.5 rounded-xl border-2 ${button.id === 12 ? 'border-green-500' : 'border-slate-500'} shadow-md transition-all hover:shadow-lg ${button.id === 12 ? 'hover:border-green-400' : 'hover:border-slate-400'} cursor-pointer`}>
                   {button.id === 1 && <Home size={14} />}
                   {button.id === 10 && <><span className="text-sm">💾</span><span className="text-xs">Saved</span></>}
                   {button.id === 11 && <><span className="text-sm">🔍</span><span className="text-xs">Google</span></>}
                   {button.id === 2 && <><Filter size={14} /><span className="text-xs">Filters</span></>}
                   {button.id === 3 && <Settings size={14} />}
                   {button.id === 6 && <><span className="text-sm">👥</span><span className="text-xs">0</span></>}
-                  {button.id === 7 && <><span className="text-sm">🧛</span><span className="text-xs">VAMP</span></>}
+                  {button.id === 7 && (<><span className="text-sm">🧛</span><span className="text-xs">VAMP</span>
+                    <span className={`ml-1 w-2 h-2 rounded-full ${j7Connected ? 'bg-green-500' : 'bg-red-500'}`} title={j7Connected ? 'J7 Connected' : 'J7 Disconnected'}></span></>)}
                   {button.id === 12 && <><span className="text-sm">🚀</span><span className="text-xs font-bold">DEPLOY</span></>}
                   {button.id === 9 && <span className="text-sm">📚</span>}
                 </button>
@@ -488,87 +978,53 @@ export default function ResizablePanels() {
         </div>
       </div>
 
-      {/* Header resize divider */}
-      <div
-        className={`w-full h-2 ${theme.headerDivider} hover:bg-gray-500 cursor-row-resize transition-colors ${
-          isDragging?.type === "header" ? "bg-gray-600" : ""
-        }`}
-        onMouseDown={() => handleHeaderDividerMouseDown("header")}
-      />
+      <div className={`w-full h-2 ${theme.headerDivider} hover:bg-gray-500 cursor-row-resize transition-colors ${isDragging?.type === "header" ? "bg-gray-600" : ""}`}
+        onMouseDown={() => handleHeaderDividerMouseDown("header")} />
 
-      {/* Main panels */}
       <div className="flex flex-1 w-full overflow-hidden">
-        {/* Panel 1 */}
-        <div
-          className="h-full"
-          style={{ width: `${panel1Width}%` }}
-        >
+        <div className="h-full" style={{ width: `${panel1Width}%` }}>
           <Panel1 
             themeId={currentTheme} 
-            activeWallet={activeWallet}
-            presetTrigger={presetTrigger}
+            activeWallet={activeWallet} 
+            presetTrigger={presetTrigger} 
             onPresetApplied={() => setPresetTrigger(null)}
+            deployedImageUrl={deployedImageUrl}
+            deployedTwitterUrl={deployedTwitterUrl}
+            onImageDeployed={() => setDeployedImageUrl(null)}
+            onTwitterDeployed={() => setDeployedTwitterUrl(null)}
+            clearTrigger={clearTrigger}
           />
         </div>
 
-        {/* Divider 1 */}
-        <div
-          className={`w-2 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors ${
-            isDragging?.type === "panel-0" ? "bg-gray-500" : ""
-          }`}
-          onMouseDown={() => handlePanelMouseDown("panel-0")}
-        />
+        <div className={`w-2 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors ${isDragging?.type === "panel-0" ? "bg-gray-500" : ""}`}
+          onMouseDown={() => handlePanelMouseDown("panel-0")} />
 
-        {/* Panel 2 - Placeholder for future coin suggestions */}
-        <div
-          className={`h-full ${theme.panel1ContentBg} transition-colors`}
-          style={{ width: `${panel2Width}%` }}
-        >
-          {/* Blank placeholder - coin suggestions to be implemented */}
-        </div>
+        <div className={`h-full ${theme.panel1ContentBg} transition-colors`} style={{ width: `${panel2Width}%` }} />
 
-        {/* Divider 2 */}
-        <div
-          className={`w-2 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors ${
-            isDragging?.type === "panel-1" ? "bg-gray-500" : ""
-          }`}
-          onMouseDown={() => handlePanelMouseDown("panel-1")}
-        />
+        <div className={`w-2 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors ${isDragging?.type === "panel-1" ? "bg-gray-500" : ""}`}
+          onMouseDown={() => handlePanelMouseDown("panel-1")} />
 
-        {/* Panel 3 */}
-        <div
-          className="h-full"
-          style={{ width: `${panel3Width}%` }}
-        >
+        <div className="h-full" style={{ width: `${panel3Width}%` }}>
           <Panel3 
-            themeId={currentTheme}
-            tweets={tweets}
-            customNotifications={customNotifications}
+            themeId={currentTheme} 
+            tweets={tweets} 
+            customNotifications={customNotifications} 
             defaultColor={defaultColor}
+            onDeploy={(imageUrl: string, twitterUrl: string) => {
+              console.log('🚀 ResizablePanels onDeploy:', { imageUrl, twitterUrl });
+              setClearTrigger(prev => prev + 1); // Trigger clear first
+              setDeployedImageUrl(imageUrl); // Then set new image
+              setDeployedTwitterUrl(twitterUrl); // And set Twitter URL
+            }}
           />
         </div>
       </div>
 
-      {/* Settings Modal */}
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)}
-        currentTheme={currentTheme}
-        onThemeChange={setCurrentTheme}
-        customNotifications={customNotifications}
-        onCustomNotificationsChange={setCustomNotifications}
-        defaultColor={defaultColor}
-        onDefaultColorChange={setDefaultColor}
-      />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} currentTheme={currentTheme} onThemeChange={setCurrentTheme}
+        customNotifications={customNotifications} onCustomNotificationsChange={setCustomNotifications} defaultColor={defaultColor} onDefaultColorChange={setDefaultColor} />
 
-      {/* Deploy Settings Modal */}
-      <DeploySettingsModal
-        isOpen={isDeploySettingsOpen}
-        onClose={() => setIsDeploySettingsOpen(false)}
-        onWalletChange={setActiveWallet}
-        presets={customPresets}
-        onPresetsChange={setCustomPresets}
-      />
+      <DeploySettingsModal isOpen={isDeploySettingsOpen} onClose={() => setIsDeploySettingsOpen(false)} onWalletChange={setActiveWallet}
+        presets={customPresets} onPresetsChange={setCustomPresets} />
     </div>
   );
 }
