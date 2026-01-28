@@ -151,51 +151,22 @@ export async function generateSolanaGradient(text: string = 'SOLANA'): Promise<s
 }
 
 /**
- * Generate letter image locally using Canvas (green background with white outlined letter)
+ * Generate letter image URL from local API (green background with white outlined letter)
+ * Access directly at: /api/letter/b (green) or /api/letter/b?color=gold (yellow)
  * @param letter The letter to display
  * @param isPump Whether this is for Pump.fun (green) or other platforms (yellow/gold)
- * @returns Data URL of the generated image
+ * @returns URL of the letter image
  */
 export async function generateLetterImage(letter: string, isPump: boolean): Promise<string> {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1000;
-  canvas.height = 1000;
-  const ctx = canvas.getContext('2d');
+  // Get the first letter
+  const char = (letter.toUpperCase()[0] || 'A').toLowerCase();
   
-  if (!ctx) throw new Error('Could not get canvas context');
+  // Build URL to local API
+  // Green for Pump.fun, gold for others
+  const colorParam = isPump ? '' : '?color=gold';
+  const imageUrl = `/api/letter/${char}${colorParam}`;
   
-  // Background color: Green for Pump.fun, Yellow/Gold for others
-  const bgColor = isPump ? '#22C55E' : '#D4A034';
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  // Get the first letter and make it uppercase
-  const char = (letter.toUpperCase()[0] || 'A');
-  
-  // Configure text style - large bold letter
-  const fontSize = 650;
-  ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  
-  // Position slightly above center for better visual balance
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2 + 30;
-  
-  // Draw the outlined letter (stroke only, no fill - creates the outline effect)
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 20;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  
-  // Draw stroke (outline)
-  ctx.strokeText(char, centerX, centerY);
-  
-  // For thicker outline effect, draw multiple times with slight offsets
-  ctx.lineWidth = 18;
-  ctx.strokeText(char, centerX, centerY);
-  
-  return canvas.toDataURL('image/png');
+  return imageUrl;
 }
 
 /**
