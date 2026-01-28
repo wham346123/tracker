@@ -993,6 +993,7 @@ export default function ResizablePanels() {
             onImageDeployed={() => setDeployedImageUrl(null)}
             onTwitterDeployed={() => setDeployedTwitterUrl(null)}
             clearTrigger={clearTrigger}
+            tweets={tweets}
           />
         </div>
 

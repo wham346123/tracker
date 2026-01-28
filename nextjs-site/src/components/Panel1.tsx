@@ -36,6 +36,21 @@ interface PresetTriggerData {
   customImageUrl?: string;
 }
 
+interface Tweet {
+  id: string;
+  twitterStatusId?: string;
+  username: string;
+  displayName: string;
+  handle: string;
+  verified: boolean;
+  timestamp: string;
+  text: string;
+  imageUrl?: string;
+  profilePic: string;
+  highlightColor?: string;
+  media?: Array<{ type: 'image' | 'video' | 'gif'; url: string }>;
+}
+
 interface Panel1Props {
   themeId: string;
   activeWallet: Wallet | null;
@@ -46,9 +61,10 @@ interface Panel1Props {
   onImageDeployed?: () => void;
   onTwitterDeployed?: () => void;
   clearTrigger?: number; // When this changes, silently clear all fields
+  tweets?: Tweet[]; // All tweets for auto-fill on copy
 }
 
-export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied, deployedImageUrl, deployedTwitterUrl, onImageDeployed, onTwitterDeployed, clearTrigger }: Panel1Props) {
+export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied, deployedImageUrl, deployedTwitterUrl, onImageDeployed, onTwitterDeployed, clearTrigger, tweets = [] }: Panel1Props) {
   const theme = getTheme(themeId);
   
   const logos = [
@@ -336,7 +352,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     }
   }, [deployedTwitterUrl, onTwitterDeployed]);
   
-  // Auto-fill on copy - listen for clipboard copy events
+  // Auto-fill on copy - listen for clipboard copy events and find tweet context
   useEffect(() => {
     if (!autoFillOnCopy) return;
     
@@ -371,6 +387,34 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               setSymbol(ticker);
               console.log('🎫 Auto-generated ticker:', ticker);
             }
+            
+            // Find the tweet that contains this text to get Twitter URL and Image
+            const matchingTweet = tweets.find(tweet => 
+              tweet.text && tweet.text.toLowerCase().includes(trimmedText.toLowerCase())
+            );
+            
+            if (matchingTweet) {
+              console.log('🐦 Found matching tweet:', matchingTweet.id);
+              
+              // Fill Twitter URL
+              const twitterUrl = matchingTweet.twitterStatusId 
+                ? `https://twitter.com/${matchingTweet.username}/status/${matchingTweet.twitterStatusId}`
+                : `https://twitter.com/${matchingTweet.username}`;
+              setTwitter(twitterUrl);
+              console.log('🔗 Auto-filled Twitter URL:', twitterUrl);
+              
+              // Fill Image - priority: media > imageUrl > profilePic
+              let imageUrl = matchingTweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+              if (!imageUrl) imageUrl = matchingTweet.imageUrl;
+              if (!imageUrl) imageUrl = matchingTweet.profilePic;
+              
+              if (imageUrl) {
+                setUploadedImage(imageUrl);
+                console.log('🖼️ Auto-filled image:', imageUrl);
+              }
+            } else {
+              console.log('⚠️ No matching tweet found for copied text');
+            }
           }
         } catch (error) {
           // Clipboard access might be denied
@@ -385,7 +429,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     return () => {
       document.removeEventListener('copy', handleCopy);
     };
-  }, [autoFillOnCopy, autoGenerateTicker]);
+  }, [autoFillOnCopy, autoGenerateTicker, tweets]);
   
   // Global Enter key handler for INSTANT deployment when Name and Ticker are filled
   useEffect(() => {
