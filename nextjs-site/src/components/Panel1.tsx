@@ -258,6 +258,58 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       setIsDeploying(false);
     }
   }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, website, twitter, deploymentService, showToast]);
+
+  // Deploy with a specific amount (for preset buttons) - doesn't change the default buyAmount
+  const handleDeployWithAmount = useCallback(async (amount: number) => {
+    // Validation
+    if (!activeWallet) {
+      showToast("Please import a wallet first! Click the Stack button (📚) in the top right.", "error");
+      return;
+    }
+    
+    if (!name || !symbol) {
+      showToast("Please fill in Token Name and Symbol!", "error");
+      return;
+    }
+    
+    if (!uploadedImage) {
+      showToast("Please upload an image for your token!", "error");
+      return;
+    }
+    
+    setIsDeploying(true);
+    
+    try {
+      await deploymentService.connect();
+      
+      deploymentService.createToken(
+        {
+          platform: selectedPlatform,
+          name: name.trim(),
+          symbol: symbol.trim(),
+          image: uploadedImage,
+          amount: amount, // Use the passed amount, not buyAmount state
+          wallets: [activeWallet.compositeKey],
+          website: website.trim() || undefined,
+          twitter: twitter.trim() || undefined,
+        },
+        (data) => {
+          showToast(
+            `Token $${symbol.trim()} deployed with ${amount} SOL!`,
+            "success"
+          );
+          setIsDeploying(false);
+        },
+        (error) => {
+          showToast(`Deployment Failed: ${error}`, "error");
+          setIsDeploying(false);
+        }
+      );
+    } catch (error) {
+      showToast(`Failed to connect to Token API: ${error}`, "error");
+      setIsDeploying(false);
+    }
+  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, website, twitter, deploymentService, showToast]);
   
   // Handle Enter key to deploy
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -963,9 +1015,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
                   <button
                     key={amount}
                     onClick={() => {
-                      setBuyAmount(amount);
-                      // Instant deploy after setting amount
-                      setTimeout(() => handleDeploy(), 50);
+                      // Deploy with this amount WITHOUT changing the default buyAmount
+                      handleDeployWithAmount(amount);
                     }}
                     className="flex-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all bg-slate-800 border-slate-600 text-gray-300 hover:border-purple-500 hover:bg-purple-600 hover:text-white"
                   >
