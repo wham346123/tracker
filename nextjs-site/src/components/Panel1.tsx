@@ -388,10 +388,49 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               console.log('🎫 Auto-generated ticker:', ticker);
             }
             
-            // Find the tweet that contains this text to get Twitter URL and Image
-            const matchingTweet = tweets.find(tweet => 
-              tweet.text && tweet.text.toLowerCase().includes(trimmedText.toLowerCase())
-            );
+            // Helper function to check if text exists in a tweet (including nested tweets)
+            const textMatchesTweet = (tweet: Tweet, searchText: string): boolean => {
+              const lowerSearch = searchText.toLowerCase();
+              // Check main tweet text
+              if (tweet.text && tweet.text.toLowerCase().includes(lowerSearch)) return true;
+              // Check quoted tweet text (for retweets/quotes where main text might be empty)
+              if (tweet.quotedTweet?.text && tweet.quotedTweet.text.toLowerCase().includes(lowerSearch)) return true;
+              // Check replied-to tweet text
+              if (tweet.repliedToTweet?.text && tweet.repliedToTweet.text.toLowerCase().includes(lowerSearch)) return true;
+              return false;
+            };
+            
+            // Helper function to extract the best image from a tweet (including nested tweets)
+            const getBestImage = (tweet: Tweet): string | undefined => {
+              // Priority 1: Main tweet media
+              let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+              if (imageUrl) return imageUrl;
+              
+              // Priority 2: Main tweet imageUrl
+              if (tweet.imageUrl) return tweet.imageUrl;
+              
+              // Priority 3: Quoted tweet media (for retweets)
+              imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+              if (imageUrl) return imageUrl;
+              
+              // Priority 4: Quoted tweet imageUrl
+              if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+              
+              // Priority 5: Replied-to tweet media
+              imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+              if (imageUrl) return imageUrl;
+              
+              // Priority 6: Replied-to tweet imageUrl
+              if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
+              
+              // Priority 7: Profile picture as fallback
+              if (tweet.profilePic) return tweet.profilePic;
+              
+              return undefined;
+            };
+            
+            // Find the tweet that contains this text (search main text, quoted text, and replied text)
+            const matchingTweet = tweets.find(tweet => textMatchesTweet(tweet, trimmedText));
             
             if (matchingTweet) {
               console.log('🐦 Found matching tweet:', matchingTweet.id);
@@ -403,10 +442,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               setTwitter(twitterUrl);
               console.log('🔗 Auto-filled Twitter URL:', twitterUrl);
               
-              // Fill Image - priority: media > imageUrl > profilePic
-              let imageUrl = matchingTweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-              if (!imageUrl) imageUrl = matchingTweet.imageUrl;
-              if (!imageUrl) imageUrl = matchingTweet.profilePic;
+              // Fill Image using enhanced extraction
+              const imageUrl = getBestImage(matchingTweet);
               
               if (imageUrl) {
                 setUploadedImage(imageUrl);

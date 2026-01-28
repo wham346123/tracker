@@ -712,12 +712,42 @@ export default function ResizablePanels() {
         
         if (!selectedText) return;
         
+        // Helper function to check if text exists in a tweet (including nested tweets)
+        const textMatchesTweet = (tweet: Tweet, searchText: string): boolean => {
+          const lowerSearch = searchText.toLowerCase();
+          if (tweet.text && tweet.text.toLowerCase().includes(lowerSearch)) return true;
+          if (tweet.quotedTweet?.text && tweet.quotedTweet.text.toLowerCase().includes(lowerSearch)) return true;
+          if (tweet.repliedToTweet?.text && tweet.repliedToTweet.text.toLowerCase().includes(lowerSearch)) return true;
+          return false;
+        };
+
+        // Helper function to extract the best image from a tweet
+        const getBestImageForPreset = (tweet: Tweet): string | undefined => {
+          let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          if (tweet.imageUrl) return tweet.imageUrl;
+          imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+          imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
+          if (tweet.profilePic) return tweet.profilePic;
+          return undefined;
+        };
+        
         let tweetImageUrl: string | undefined = undefined;
+        let tweetLink: string | undefined = undefined;
+        
         if (matchingPreset.imageType === 'Image in Post') {
-          const tweetWithImage = tweets.find(tweet => 
-            tweet.text.includes(selectedText) && tweet.imageUrl
-          );
-          if (tweetWithImage) tweetImageUrl = tweetWithImage.imageUrl;
+          const matchingTweet = tweets.find(tweet => textMatchesTweet(tweet, selectedText));
+          if (matchingTweet) {
+            tweetImageUrl = getBestImageForPreset(matchingTweet);
+            // Also get tweet link
+            if (matchingTweet.twitterStatusId) {
+              tweetLink = `https://twitter.com/${matchingTweet.username}/status/${matchingTweet.twitterStatusId}`;
+            }
+          }
         }
         
         e.preventDefault();
@@ -729,6 +759,7 @@ export default function ResizablePanels() {
           imageType: matchingPreset.imageType,
           selectedText,
           tweetImageUrl,
+          tweetLink,
           customImageUrl: matchingPreset.customImageUrl,
         });
       }
@@ -776,16 +807,54 @@ export default function ResizablePanels() {
 
         console.log('⚡ INSTA-DEPLOY triggered with text:', selectedText);
 
-        // Find the tweet containing this text
-        const matchingTweet = tweets.find(tweet => 
-          tweet.text && tweet.text.toLowerCase().includes(selectedText.toLowerCase())
-        );
+        // Helper function to check if text exists in a tweet (including nested tweets)
+        const textMatchesTweet = (tweet: Tweet, searchText: string): boolean => {
+          const lowerSearch = searchText.toLowerCase();
+          // Check main tweet text
+          if (tweet.text && tweet.text.toLowerCase().includes(lowerSearch)) return true;
+          // Check quoted tweet text (for retweets/quotes where main text might be empty)
+          if (tweet.quotedTweet?.text && tweet.quotedTweet.text.toLowerCase().includes(lowerSearch)) return true;
+          // Check replied-to tweet text
+          if (tweet.repliedToTweet?.text && tweet.repliedToTweet.text.toLowerCase().includes(lowerSearch)) return true;
+          return false;
+        };
 
-        // Get tweet image - fallback to profile picture if no tweet image
-        let tweetImageUrl = matchingTweet?.imageUrl || matchingTweet?.media?.[0]?.url;
-        if (!tweetImageUrl && matchingTweet?.profilePic) {
-          tweetImageUrl = matchingTweet.profilePic;
-          console.log('📸 Using profile picture as fallback:', tweetImageUrl);
+        // Helper function to extract the best image from a tweet (including nested tweets)
+        const getBestImage = (tweet: Tweet): string | undefined => {
+          // Priority 1: Main tweet media
+          let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          
+          // Priority 2: Main tweet imageUrl
+          if (tweet.imageUrl) return tweet.imageUrl;
+          
+          // Priority 3: Quoted tweet media (for retweets)
+          imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          
+          // Priority 4: Quoted tweet imageUrl
+          if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+          
+          // Priority 5: Replied-to tweet media
+          imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+          if (imageUrl) return imageUrl;
+          
+          // Priority 6: Replied-to tweet imageUrl
+          if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
+          
+          // Priority 7: Profile picture as fallback
+          if (tweet.profilePic) return tweet.profilePic;
+          
+          return undefined;
+        };
+
+        // Find the tweet containing this text (search main text, quoted text, and replied text)
+        const matchingTweet = tweets.find(tweet => textMatchesTweet(tweet, selectedText));
+
+        // Get tweet image using enhanced extraction
+        let tweetImageUrl = matchingTweet ? getBestImage(matchingTweet) : undefined;
+        if (tweetImageUrl) {
+          console.log('📸 Found image:', tweetImageUrl);
         }
 
         // Build tweet link
