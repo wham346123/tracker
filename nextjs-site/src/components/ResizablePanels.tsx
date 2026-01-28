@@ -242,13 +242,18 @@ export default function ResizablePanels() {
     const imageUrl = media.find(m => m.type === 'image')?.url;
     const timestamp = j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : new Date().toISOString();
     
-    // Extract reply information
-    const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || j7Tweet.inReplyTo || j7Tweet.parentTweet || j7Tweet.parent || null;
+    // Extract reply information - replyTo is just a reference (id, handle), repliedQuote has the full tweet
+    const replyToRef = j7Tweet.replyTo || j7Tweet.repliedTo || null;
+    // The ACTUAL replied-to tweet content is in repliedQuote, not replyTo!
+    const replyTo = j7Tweet.repliedQuote || j7Tweet.parentTweet || j7Tweet.parent || replyToRef;
     
-    // Debug: Log full tweet structure for replies
+    // Debug: Log reply structure
     if (j7Tweet.isReply || replyTo) {
-      console.log('🔴🔴🔴 FULL REPLY TWEET STRUCTURE:', JSON.stringify(j7Tweet, null, 2));
-      console.log('🔴 j7Tweet keys:', Object.keys(j7Tweet));
+      console.log('🔴 repliedQuote exists:', !!j7Tweet.repliedQuote);
+      console.log('🔴 repliedQuote keys:', j7Tweet.repliedQuote ? Object.keys(j7Tweet.repliedQuote) : 'N/A');
+      if (j7Tweet.repliedQuote) {
+        console.log('🔴 repliedQuote.text:', j7Tweet.repliedQuote.text);
+      }
     }
     
     // Extract quoted tweet (for quote tweets/retweets)
