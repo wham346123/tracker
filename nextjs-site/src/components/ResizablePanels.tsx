@@ -723,18 +723,28 @@ export default function ResizablePanels() {
           return false;
         };
 
-        // Helper function to extract the best image from a tweet (NO profile pic fallback - let ASCII generate)
+        // Helper function to extract the best image from a tweet (NO profile pics - let ASCII generate)
         const getBestImageForPreset = (tweet: Tweet): string | undefined => {
+          // Helper to check if URL is a profile picture (skip these)
+          const isProfilePic = (url: string | undefined): boolean => {
+            if (!url) return false;
+            if (tweet.profilePic && url === tweet.profilePic) return true;
+            if (tweet.quotedTweet?.profilePic && url === tweet.quotedTweet.profilePic) return true;
+            if (tweet.repliedToTweet?.profilePic && url === tweet.repliedToTweet.profilePic) return true;
+            if (url.includes('profile_images') || url.includes('_normal') || url.includes('_bigger')) return true;
+            return false;
+          };
+          
           let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
-          if (tweet.imageUrl) return tweet.imageUrl;
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
+          if (tweet.imageUrl && !isProfilePic(tweet.imageUrl)) return tweet.imageUrl;
           imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
-          if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
+          if (tweet.quotedTweet?.imageUrl && !isProfilePic(tweet.quotedTweet.imageUrl)) return tweet.quotedTweet.imageUrl;
           imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
-          if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
-          // Don't fall back to profilePic - return undefined so ASCII art generates instead
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
+          if (tweet.repliedToTweet?.imageUrl && !isProfilePic(tweet.repliedToTweet.imageUrl)) return tweet.repliedToTweet.imageUrl;
+          // No actual image found - return undefined so ASCII art generates
           return undefined;
         };
         
@@ -821,30 +831,42 @@ export default function ResizablePanels() {
           return false;
         };
 
-        // Helper function to extract the best image from a tweet (NO profile pic - let ASCII generate)
+        // Helper function to extract the best image from a tweet (NO profile pics - let ASCII generate)
         const getBestImage = (tweet: Tweet): string | undefined => {
+          // Helper to check if URL is a profile picture (skip these)
+          const isProfilePic = (url: string | undefined): boolean => {
+            if (!url) return false;
+            // Check if it matches any known profile pic URL
+            if (tweet.profilePic && url === tweet.profilePic) return true;
+            if (tweet.quotedTweet?.profilePic && url === tweet.quotedTweet.profilePic) return true;
+            if (tweet.repliedToTweet?.profilePic && url === tweet.repliedToTweet.profilePic) return true;
+            // Also check for common profile pic URL patterns
+            if (url.includes('profile_images') || url.includes('_normal') || url.includes('_bigger')) return true;
+            return false;
+          };
+          
           // Priority 1: Main tweet media
           let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
           
-          // Priority 2: Main tweet imageUrl
-          if (tweet.imageUrl) return tweet.imageUrl;
+          // Priority 2: Main tweet imageUrl (but not if it's the profile pic)
+          if (tweet.imageUrl && !isProfilePic(tweet.imageUrl)) return tweet.imageUrl;
           
           // Priority 3: Quoted tweet media (for retweets)
           imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
           
           // Priority 4: Quoted tweet imageUrl
-          if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+          if (tweet.quotedTweet?.imageUrl && !isProfilePic(tweet.quotedTweet.imageUrl)) return tweet.quotedTweet.imageUrl;
           
           // Priority 5: Replied-to tweet media
           imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
-          if (imageUrl) return imageUrl;
+          if (imageUrl && !isProfilePic(imageUrl)) return imageUrl;
           
           // Priority 6: Replied-to tweet imageUrl
-          if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
+          if (tweet.repliedToTweet?.imageUrl && !isProfilePic(tweet.repliedToTweet.imageUrl)) return tweet.repliedToTweet.imageUrl;
           
-          // Don't use profile pic - return undefined so ASCII art generates instead
+          // No actual image found - return undefined so ASCII art generates
           return undefined;
         };
 
