@@ -794,7 +794,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     };
   }, [name, symbol, uploadedImage, activeWallet, isDeploying, handleDeploy]);
   
-  // Apply preset when triggered - INSTANT BACKGROUND DEPLOY
+  // Apply preset when triggered - INSTANT BACKGROUND DEPLOY (or preview in test mode)
   useEffect(() => {
     if (presetTrigger && onPresetApplied) {
       console.log('📋 Applying preset:', presetTrigger);
@@ -820,14 +820,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
         ? platformMap[presetTrigger.deployPlatform] || selectedPlatform
         : selectedPlatform;
       
-      // Handle tweet image and deploy instantly in background
+      // Handle tweet image and deploy instantly in background (or preview in test mode)
       const instantDeploy = async () => {
-        if (!activeWallet) {
-          showToast("Please import a wallet first!", "error");
-          onPresetApplied();
-          return;
-        }
-        
         if (!tokenName || !tokenSymbol) {
           showToast("Could not generate token name from selected text!", "error");
           onPresetApplied();
@@ -863,6 +857,36 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
         
         if (!imageToUse) {
           showToast("No image available for deployment!", "error");
+          onPresetApplied();
+          return;
+        }
+        
+        // TEST MODE - Show preview instead of deploying
+        if (testModeRef.current) {
+          const platformDisplayNames: { [key: string]: string } = {
+            'pump': 'Pump.fun',
+            'bonk': 'Raydium/Bonk',
+            'usd1': 'USD1/Jupiter'
+          };
+          
+          setPreviewData({
+            name: tokenName,
+            symbol: tokenSymbol,
+            image: imageToUse,
+            platform: platformDisplayNames[deployPlatform] || deployPlatform,
+            amount: buyAmount || 0.01,
+            website: website.trim(),
+            twitter: presetTrigger.tweetLink || twitter.trim(),
+            imageMode: presetTrigger.imageType || 'Auto'
+          });
+          setShowPreview(true);
+          onPresetApplied();
+          return;
+        }
+        
+        // REAL MODE - Check wallet and deploy
+        if (!activeWallet) {
+          showToast("Please import a wallet first!", "error");
           onPresetApplied();
           return;
         }
