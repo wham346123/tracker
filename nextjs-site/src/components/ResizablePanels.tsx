@@ -723,7 +723,7 @@ export default function ResizablePanels() {
           return false;
         };
 
-        // Helper function to extract the best image from a tweet
+        // Helper function to extract the best image from a tweet (NO profile pic fallback - let ASCII generate)
         const getBestImageForPreset = (tweet: Tweet): string | undefined => {
           let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
           if (imageUrl) return imageUrl;
@@ -734,7 +734,7 @@ export default function ResizablePanels() {
           imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
           if (imageUrl) return imageUrl;
           if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
-          if (tweet.profilePic) return tweet.profilePic;
+          // Don't fall back to profilePic - return undefined so ASCII art generates instead
           return undefined;
         };
         
@@ -821,7 +821,7 @@ export default function ResizablePanels() {
           return false;
         };
 
-        // Helper function to extract the best image from a tweet (including nested tweets)
+        // Helper function to extract the best image from a tweet (NO profile pic - let ASCII generate)
         const getBestImage = (tweet: Tweet): string | undefined => {
           // Priority 1: Main tweet media
           let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
@@ -844,9 +844,7 @@ export default function ResizablePanels() {
           // Priority 6: Replied-to tweet imageUrl
           if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
           
-          // Priority 7: Profile picture as fallback
-          if (tweet.profilePic) return tweet.profilePic;
-          
+          // Don't use profile pic - return undefined so ASCII art generates instead
           return undefined;
         };
 
