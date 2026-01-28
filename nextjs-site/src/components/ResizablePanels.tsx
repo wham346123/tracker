@@ -243,7 +243,13 @@ export default function ResizablePanels() {
     const timestamp = j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : new Date().toISOString();
     
     // Extract reply information
-    const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || null;
+    const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || j7Tweet.inReplyTo || j7Tweet.parentTweet || j7Tweet.parent || null;
+    
+    // Debug: Log full tweet structure for replies
+    if (j7Tweet.isReply || replyTo) {
+      console.log('🔴🔴🔴 FULL REPLY TWEET STRUCTURE:', JSON.stringify(j7Tweet, null, 2));
+      console.log('🔴 j7Tweet keys:', Object.keys(j7Tweet));
+    }
     
     // Extract quoted tweet (for quote tweets/retweets)
     let quotedTweet: Tweet | undefined;
