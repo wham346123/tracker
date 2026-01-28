@@ -3,7 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { getTheme } from "@/utils/themes";
 import Image from "next/image";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getDeploymentService, CreateTokenParams } from "@/services/tokenApi";
 import Toast from "./Toast";
 import { generatePresetImage } from "@/utils/imageGenerator";
@@ -107,6 +107,12 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   } | null>(null);
   
   const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
+  
+  // Use ref to avoid stale closure issues with testMode prop
+  const testModeRef = useRef(testMode);
+  useEffect(() => {
+    testModeRef.current = testMode;
+  }, [testMode]);
   
   // Map platform index to deployment platform type
   const getPlatformType = (index: number): "pump" | "bonk" | "usd1" => {
@@ -263,8 +269,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   
   // Deploy token function - wrapped in useCallback for global Enter handler
   const handleDeploy = useCallback(async () => {
-    // Test mode - show preview instead of deploying
-    if (testMode) {
+    // Test mode - show preview instead of deploying (use ref for current value)
+    if (testModeRef.current) {
       await generatePreview(buyAmount);
       return;
     }
@@ -344,12 +350,12 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, testMode, generatePreview]);
+  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, generatePreview]);
 
   // Deploy with a specific amount (for preset buttons) - doesn't change the default buyAmount
   const handleDeployWithAmount = useCallback(async (amount: number) => {
-    // Test mode - show preview instead of deploying
-    if (testMode) {
+    // Test mode - show preview instead of deploying (use ref for current value)
+    if (testModeRef.current) {
       await generatePreview(amount);
       return;
     }
@@ -421,7 +427,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, testMode, generatePreview]);
+  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, generatePreview]);
   
   // Handle Enter key to deploy
   const handleKeyDown = (e: React.KeyboardEvent) => {
