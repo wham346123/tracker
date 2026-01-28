@@ -93,6 +93,18 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const [presetAmounts, setPresetAmounts] = useState<number[]>([1, 2, 3, 4, 5]);
   const [isEditingPresets, setIsEditingPresets] = useState(false);
   const [tempPresets, setTempPresets] = useState<string[]>(['1', '2', '3', '4', '5']);
+  const [testMode, setTestMode] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    name: string;
+    symbol: string;
+    image: string;
+    platform: string;
+    amount: number;
+    website: string;
+    twitter: string;
+    imageMode: string;
+  } | null>(null);
   
   const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
   
@@ -198,9 +210,65 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     newValues[index] = parseFloat(value) || 0;
     setPlatformValues(newValues);
   };
+
+  // Generate preview for test mode
+  const generatePreview = useCallback(async (amount: number) => {
+    if (!name || !symbol) {
+      showToast("Please fill in Token Name and Symbol!", "error");
+      return;
+    }
+
+    setIsDeploying(true);
+    
+    try {
+      // Generate image if none uploaded
+      let imageToUse = uploadedImage;
+      if (!imageToUse) {
+        const imageTypeMap = {
+          'letter': 'Letter Image',
+          'sol': 'SOL ASCII (Gradient)',
+          'ascii': 'ASCII Art'
+        };
+        imageToUse = await generatePresetImage(
+          imageTypeMap[selectedImageMode],
+          symbol.trim(),
+          undefined,
+          selectedPlatform === 'pump' ? 'Pump.fun' : undefined
+        );
+      }
+
+      const platformDisplayNames: { [key: string]: string } = {
+        'pump': 'Pump.fun',
+        'bonk': 'Raydium/Bonk',
+        'usd1': 'USD1/Jupiter'
+      };
+
+      setPreviewData({
+        name: name.trim(),
+        symbol: symbol.trim(),
+        image: imageToUse,
+        platform: platformDisplayNames[selectedPlatform] || selectedPlatform,
+        amount: amount,
+        website: website.trim(),
+        twitter: twitter.trim(),
+        imageMode: selectedImageMode.toUpperCase()
+      });
+      setShowPreview(true);
+    } catch (error) {
+      showToast(`Failed to generate preview: ${error}`, "error");
+    }
+    
+    setIsDeploying(false);
+  }, [name, symbol, uploadedImage, selectedImageMode, selectedPlatform, website, twitter, showToast]);
   
   // Deploy token function - wrapped in useCallback for global Enter handler
   const handleDeploy = useCallback(async () => {
+    // Test mode - show preview instead of deploying
+    if (testMode) {
+      await generatePreview(buyAmount);
+      return;
+    }
+
     // Validation
     if (!activeWallet) {
       showToast("Please import a wallet first! Click the Stack button (📚) in the top right.", "error");
@@ -276,10 +344,16 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast]);
+  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, testMode, generatePreview]);
 
   // Deploy with a specific amount (for preset buttons) - doesn't change the default buyAmount
   const handleDeployWithAmount = useCallback(async (amount: number) => {
+    // Test mode - show preview instead of deploying
+    if (testMode) {
+      await generatePreview(amount);
+      return;
+    }
+
     // Validation
     if (!activeWallet) {
       showToast("Please import a wallet first! Click the Stack button (📚) in the top right.", "error");
@@ -347,7 +421,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast]);
+  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast, testMode, generatePreview]);
   
   // Handle Enter key to deploy
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -908,7 +982,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           </div>
 
           {/* Auto-fill and Auto-generate Ticker Row */}
-          <div className="flex items-center gap-4 px-1">
+          <div className="flex items-center gap-4 px-1 flex-wrap">
             {/* Auto-fill on copy checkbox */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -929,6 +1003,17 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
                 className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
               />
               <span className="text-slate-300 text-xs select-none">Auto-generate ticker</span>
+            </label>
+
+            {/* Test Mode checkbox */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={testMode}
+                onChange={(e) => setTestMode(e.target.checked)}
+                className="w-4 h-4 rounded border-orange-500 bg-slate-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className={`text-xs select-none ${testMode ? 'text-orange-400 font-medium' : 'text-slate-300'}`}>Test Mode</span>
             </label>
           </div>
 
@@ -1101,23 +1186,115 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
             <button 
               onClick={handleDeploy}
               disabled={isDeploying}
-              className={`flex-[1.5] px-3 py-2.5 ${isDeploying ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'} text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5`}
+              className={`flex-[1.5] px-3 py-2.5 ${isDeploying ? 'bg-gray-600 cursor-not-allowed' : testMode ? 'bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'} text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5`}
             >
               {isDeploying ? (
                 <>
                   <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Deploying...</span>
+                  <span>{testMode ? 'Generating...' : 'Deploying...'}</span>
                 </>
               ) : (
                 <>
-                  <span>⚡</span>
-                  <span>Deploy (Enter)</span>
+                  <span>{testMode ? '👁️' : '⚡'}</span>
+                  <span>{testMode ? 'Preview' : 'Deploy (Enter)'}</span>
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Test Mode Preview Modal */}
+      {showPreview && previewData && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowPreview(false)}>
+          <div className="bg-gray-900 rounded-xl w-full max-w-lg mx-4 border border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-yellow-500 px-6 py-4">
+              <h2 className="text-white text-xl font-bold flex items-center gap-2">
+                👁️ Token Preview (Test Mode)
+              </h2>
+              <p className="text-white/80 text-sm">This is how your token would look</p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Token Image */}
+              <div className="flex justify-center">
+                <div className="w-40 h-40 rounded-xl overflow-hidden border-4 border-gray-700 bg-black">
+                  <img 
+                    src={previewData.image} 
+                    alt="Token Preview" 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+
+              {/* Token Info */}
+              <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Name</span>
+                  <span className="text-white font-bold text-lg">{previewData.name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Symbol/Ticker</span>
+                  <span className="text-green-400 font-bold text-lg">${previewData.symbol}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Platform</span>
+                  <span className="text-blue-400 font-medium">{previewData.platform}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Buy Amount</span>
+                  <span className="text-purple-400 font-medium">{previewData.amount} SOL</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Image Mode</span>
+                  <span className="text-yellow-400 font-medium">{previewData.imageMode}</span>
+                </div>
+                {previewData.website && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">Website</span>
+                    <span className="text-cyan-400 font-medium truncate max-w-[200px]">{previewData.website}</span>
+                  </div>
+                )}
+                {previewData.twitter && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">Twitter</span>
+                    <span className="text-cyan-400 font-medium truncate max-w-[200px]">{previewData.twitter}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Info Note */}
+              <div className="bg-orange-900/30 border border-orange-700/50 rounded-lg p-3">
+                <p className="text-orange-300 text-xs text-center">
+                  🧪 Test Mode is ON - No actual deployment will happen. Disable Test Mode to deploy for real.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-800 flex gap-3">
+              <button
+                onClick={() => setShowPreview(false)}
+                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Close Preview
+              </button>
+              <button
+                onClick={() => {
+                  setTestMode(false);
+                  setShowPreview(false);
+                  showToast("Test Mode disabled. Ready to deploy for real!", "info");
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-bold transition-all"
+              >
+                ⚡ Deploy for Real
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
