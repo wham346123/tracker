@@ -151,79 +151,51 @@ export async function generateSolanaGradient(text: string = 'SOLANA'): Promise<s
 }
 
 /**
- * Generate letter image using ngrok hosted images with optional background color change
+ * Generate letter image locally using Canvas (green background with white outlined letter)
  * @param letter The letter to display
- * @param isPump Whether this is for Pump.fun (keeps green) or other platforms (changes to yellow/gold)
- * @returns Data URL of the generated/modified image
+ * @param isPump Whether this is for Pump.fun (green) or other platforms (yellow/gold)
+ * @returns Data URL of the generated image
  */
 export async function generateLetterImage(letter: string, isPump: boolean): Promise<string> {
-  // Get the first letter and convert to lowercase for URL
-  const char = (letter.toUpperCase()[0] || 'A').toLowerCase();
+  const canvas = document.createElement('canvas');
+  canvas.width = 1000;
+  canvas.height = 1000;
+  const ctx = canvas.getContext('2d');
   
-  // Base URL for letter images (all use {letter}1.png)
-  const baseUrl = 'https://mustang-supreme-plainly.ngrok-free.app/images';
-  const imageUrl = `${baseUrl}/${char}1.png`;
+  if (!ctx) throw new Error('Could not get canvas context');
   
-  // If Pump.fun, return the image URL directly (keep green background)
-  if (isPump) {
-    return imageUrl;
-  }
+  // Background color: Green for Pump.fun, Yellow/Gold for others
+  const bgColor = isPump ? '#22C55E' : '#D4A034';
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // For non-Pump platforms, load the image and change background from green to yellow/gold
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-      
-      // Draw the original image
-      ctx.drawImage(img, 0, 0);
-      
-      // Get image data to modify background color
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      // Replace green background (#22C55E or similar green) with yellow/gold (#D4A034)
-      // Define green color range to replace
-      const greenThreshold = 50; // Tolerance for green detection
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Detect green pixels (g > r and g > b, and relatively bright)
-        if (g > r + greenThreshold && g > b + greenThreshold && g > 100) {
-          // Replace with yellow/gold color #D4A034 (212, 160, 52)
-          data[i] = 212;     // R
-          data[i + 1] = 160; // G
-          data[i + 2] = 52;  // B
-          // Alpha (i + 3) stays the same
-        }
-      }
-      
-      // Put the modified image data back
-      ctx.putImageData(imageData, 0, 0);
-      
-      // Convert to data URL
-      resolve(canvas.toDataURL('image/png'));
-    };
-    
-    img.onerror = () => {
-      reject(new Error(`Failed to load image: ${imageUrl}`));
-    };
-    
-    img.src = imageUrl;
-  });
+  // Get the first letter and make it uppercase
+  const char = (letter.toUpperCase()[0] || 'A');
+  
+  // Configure text style - large bold letter
+  const fontSize = 650;
+  ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Position slightly above center for better visual balance
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2 + 30;
+  
+  // Draw the outlined letter (stroke only, no fill - creates the outline effect)
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.lineWidth = 20;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  
+  // Draw stroke (outline)
+  ctx.strokeText(char, centerX, centerY);
+  
+  // For thicker outline effect, draw multiple times with slight offsets
+  ctx.lineWidth = 18;
+  ctx.strokeText(char, centerX, centerY);
+  
+  return canvas.toDataURL('image/png');
 }
 
 /**
