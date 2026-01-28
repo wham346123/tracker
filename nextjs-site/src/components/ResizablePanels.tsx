@@ -368,6 +368,11 @@ export default function ResizablePanels() {
                            rtUsername;
       
       // ULTRA COMPREHENSIVE text extraction - check EVERY possible field
+      // Log all available keys to help debug
+      console.log('🔑 All rt keys:', Object.keys(rt));
+      console.log('🔑 rt.tweet keys:', rt.tweet ? Object.keys(rt.tweet) : 'no tweet object');
+      console.log('🔑 rt.data keys:', rt.data ? Object.keys(rt.data) : 'no data object');
+      
       const rtText = rt.text || 
                      rt.fullText || 
                      rt.full_text ||
@@ -378,11 +383,25 @@ export default function ResizablePanels() {
                      rt.tweet?.text ||
                      rt.tweet?.fullText ||
                      rt.tweet?.full_text ||
+                     rt.tweet?.content ||
                      rt.status?.text ||
                      rt.status?.full_text ||
+                     rt.data?.text ||
+                     rt.data?.fullText ||
+                     rt.data?.full_text ||
+                     rt.originalTweet?.text ||
+                     rt.original?.text ||
+                     rt.note?.text ||
+                     rt.post?.text ||
+                     rt.post?.content ||
+                     // Sometimes the text might be directly a string value in a weird key
+                     (typeof rt === 'string' ? rt : '') ||
                      '';
       
       console.log('📝 Extracted text:', rtText);
+      console.log('📝 Raw rt.text value:', rt.text);
+      console.log('📝 Raw rt.fullText value:', rt.fullText);
+      console.log('📝 Raw rt.content value:', rt.content);
       
       // COMPREHENSIVE profile pic extraction - check EVERYTHING
       const rtProfilePic = rt.author?.avatar || 
