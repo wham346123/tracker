@@ -828,7 +828,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           return;
         }
         
-        let imageToUse = uploadedImage; // Use existing image if available
+        // For preset triggers (Ctrl+X), DON'T use the GUI's uploaded image - use tweet image or generate fresh
+        let imageToUse: string | null = null;
         
         // Use tweet image directly if available (avoid CORS issues with cropping)
         if (presetTrigger.tweetImageUrl && presetTrigger.imageType === 'Image in Post') {
