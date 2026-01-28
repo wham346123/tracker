@@ -160,16 +160,9 @@ export async function generateLetterImage(letter: string, isPump: boolean): Prom
   // Get the first letter
   const char = (letter.toUpperCase()[0] || 'A').toLowerCase();
   
-  // Netlify hosted images (green background)
-  const baseUrl = 'https://incredible-platypus-eab90a.netlify.app/images';
+  // Netlify hosted images (green background) - files are at root level
+  const baseUrl = 'https://incredible-platypus-eab90a.netlify.app';
   const imageUrl = `${baseUrl}/${char}1.png`;
-  
-  // If not Pump.fun, we need to change the background color
-  // For now, just return the green version (you can upload gold versions too)
-  if (!isPump) {
-    // TODO: If you want gold versions, upload them as a1_gold.png, b1_gold.png, etc.
-    // For now, use green for all platforms
-  }
   
   return imageUrl;
 }
