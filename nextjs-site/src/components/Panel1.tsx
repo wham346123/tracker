@@ -98,22 +98,25 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     showToast("Form cleared!", "info");
   };
   
-  // Auto-sync name to symbol with smart abbreviation
+  // Auto-sync name to symbol with smart abbreviation (only when autoGenerateTicker is enabled)
   const handleNameChange = (value: string) => {
     setName(value);
     
-    if (value.length <= 13) {
-      setSymbol(value.toUpperCase());
-    } else {
-      // Smart abbreviation: take first letters of words or compress
-      const words = value.trim().split(/\s+/);
-      if (words.length > 1) {
-        // Use first letter of each word
-        const abbreviated = words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
-        setSymbol(abbreviated);
+    // Only auto-generate ticker if the checkbox is enabled
+    if (autoGenerateTicker) {
+      if (value.length <= 13) {
+        setSymbol(value.toUpperCase());
       } else {
-        // Single long word - take first 13 chars
-        setSymbol(value.slice(0, 13).toUpperCase());
+        // Smart abbreviation: take first letters of words or compress
+        const words = value.trim().split(/\s+/);
+        if (words.length > 1) {
+          // Use first letter of each word
+          const abbreviated = words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
+          setSymbol(abbreviated);
+        } else {
+          // Single long word - take first 13 chars
+          setSymbol(value.slice(0, 13).toUpperCase());
+        }
       }
     }
   };
