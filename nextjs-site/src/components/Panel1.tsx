@@ -356,13 +356,13 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   useEffect(() => {
     if (!autoFillOnCopy) return;
     
-    const handleCopy = () => {
-      // Use setTimeout to let the clipboard update first
-      setTimeout(async () => {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text && text.trim()) {
-            const trimmedText = text.trim();
+    const handleCopy = (e: ClipboardEvent) => {
+      // Get the selected text directly from the selection (works in all browsers)
+      const selection = window.getSelection();
+      const text = selection?.toString();
+      
+      if (text && text.trim()) {
+        const trimmedText = text.trim();
             console.log('📋 Auto-fill on copy:', trimmedText);
             
             // Set the name field
@@ -453,18 +453,13 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               console.log('⚠️ No matching tweet found for copied text');
             }
           }
-        } catch (error) {
-          // Clipboard access might be denied
-          console.log('📋 Clipboard access denied or empty');
-        }
-      }, 50);
     };
     
     // Listen for copy events
-    document.addEventListener('copy', handleCopy);
+    document.addEventListener('copy', handleCopy as EventListener);
     
     return () => {
-      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('copy', handleCopy as EventListener);
     };
   }, [autoFillOnCopy, autoGenerateTicker, tweets]);
   
