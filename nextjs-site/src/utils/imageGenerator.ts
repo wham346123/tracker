@@ -151,8 +151,7 @@ export async function generateSolanaGradient(text: string = 'SOLANA'): Promise<s
 }
 
 /**
- * Generate letter image URL from local API (green background with white outlined letter)
- * Access directly at: /api/letter/b (green) or /api/letter/b?color=gold (yellow)
+ * Generate letter image URL from Netlify hosted images
  * @param letter The letter to display
  * @param isPump Whether this is for Pump.fun (green) or other platforms (yellow/gold)
  * @returns URL of the letter image
@@ -161,10 +160,16 @@ export async function generateLetterImage(letter: string, isPump: boolean): Prom
   // Get the first letter
   const char = (letter.toUpperCase()[0] || 'A').toLowerCase();
   
-  // Build URL to local API
-  // Green for Pump.fun, gold for others
-  const colorParam = isPump ? '' : '?color=gold';
-  const imageUrl = `/api/letter/${char}${colorParam}`;
+  // Netlify hosted images (green background)
+  const baseUrl = 'https://incredible-platypus-eab90a.netlify.app/images';
+  const imageUrl = `${baseUrl}/${char}1.png`;
+  
+  // If not Pump.fun, we need to change the background color
+  // For now, just return the green version (you can upload gold versions too)
+  if (!isPump) {
+    // TODO: If you want gold versions, upload them as a1_gold.png, b1_gold.png, etc.
+    // For now, use green for all platforms
+  }
   
   return imageUrl;
 }
