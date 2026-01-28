@@ -855,10 +855,24 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           }
         }
         
+        // Fallback: Generate ASCII art if no image available
         if (!imageToUse) {
-          showToast("No image available for deployment!", "error");
-          onPresetApplied();
-          return;
+          try {
+            console.log('🎨 No image in post, generating ASCII art fallback for:', baseText);
+            imageToUse = await generatePresetImage(
+              'ASCII Art',
+              baseText || tokenSymbol,
+              undefined,
+              presetTrigger.deployPlatform
+            );
+            console.log('✅ ASCII fallback generated!');
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            console.error('❌ ASCII fallback failed:', errorMsg);
+            showToast(`Image generation failed: ${errorMsg}`, "error");
+            onPresetApplied();
+            return;
+          }
         }
         
         // TEST MODE - Show preview instead of deploying
