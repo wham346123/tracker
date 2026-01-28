@@ -852,11 +852,20 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
             )}
           </div>
 
-          {/* 6 Circular Indicators with Editable Values */}
-          <div className={`flex justify-around items-center py-2 ${theme.inputBg} rounded-lg border ${theme.inputBorder}`}>
-            {logos.map((logo, i) => (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 overflow-hidden">
+          {/* Platform Section */}
+          <div className="mt-2">
+            <label className="text-gray-400 text-xs font-medium mb-2 block text-center">Platform</label>
+            <div className="flex justify-center items-center gap-2">
+              {logos.map((logo, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedPlatform(platformNames[i] as "pump" | "bonk" | "usd1")}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all overflow-hidden ${
+                    selectedPlatform === platformNames[i] 
+                      ? 'border-green-500 bg-green-900/30 ring-2 ring-green-500/50' 
+                      : 'border-slate-600 bg-slate-800 hover:border-slate-500'
+                  }`}
+                >
                   <Image 
                     src={logo.src} 
                     alt={logo.alt} 
@@ -864,89 +873,65 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
                     height={24}
                     className="object-contain"
                   />
-                </div>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={platformValues[i]}
-                  onChange={(e) => handlePlatformValueChange(i, e.target.value)}
-                  className="w-12 bg-slate-800 text-white text-xs font-medium text-center py-0.5 rounded border border-slate-600 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Buy Amount */}
-          <div className="mt-2">
-            <label className="text-white text-xs font-medium mb-0.5 block">Buy Amount</label>
+          {/* Buy Amount (SOL) */}
+          <div className="mt-3">
+            <label className="text-gray-400 text-xs font-medium mb-1.5 block text-center">Buy Amount (SOL)</label>
             <input
               type="number"
               step="any"
               value={buyAmount}
               onChange={(e) => setBuyAmount(parseFloat(e.target.value) || 0)}
               onKeyDown={handleKeyDown}
-              className="w-full bg-slate-700 text-white px-3 py-2 rounded-2xl border-2 border-slate-500 text-sm focus:outline-none focus:border-slate-400 font-medium"
+              className="w-full bg-slate-900 text-white px-3 py-2.5 rounded-lg border border-slate-700 text-sm focus:outline-none focus:border-slate-500 font-medium text-center"
             />
           </div>
 
-          {/* Multi, Auto-Sell Row */}
-          <div className="flex gap-2">
-            {/* Multi Button */}
-            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
-              <span>Multi</span>
-              <span className={`${theme.inputBg} px-2 py-0.5 rounded-lg text-xs`}>1x</span>
-            </button>
-
-            {/* Auto-Sell Button */}
-            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
-              <span>Auto-Sell</span>
-              <div className="w-9 h-4 bg-gray-600 rounded-full relative">
-                <div className="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5"></div>
-              </div>
-            </button>
-          </div>
-
-          {/* Sell, Bundle Row */}
-          <div className="flex gap-2">
-            {/* Sell Button */}
-            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs flex items-center justify-between transition-colors`}>
-              <span>Sell</span>
-              <div className="w-9 h-4 bg-gray-600 rounded-full relative">
-                <div className="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5"></div>
-              </div>
-            </button>
-
-            {/* Bundle Button */}
-            <button className={`flex-1 ${theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} px-3 py-2 rounded-2xl border-2 ${theme.buttonBorder} font-medium text-xs transition-colors`}>
-              Bundle
-            </button>
+          {/* Preset Amount Buttons */}
+          <div className="flex gap-1.5 mt-2">
+            {[0.0001, 2, 3, 5, 10].map((amount) => (
+              <button
+                key={amount}
+                onClick={() => setBuyAmount(amount)}
+                className={`flex-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
+                  buyAmount === amount
+                    ? 'bg-purple-600 border-purple-500 text-white'
+                    : 'bg-slate-800 border-slate-600 text-gray-300 hover:border-slate-500 hover:bg-slate-700'
+                }`}
+              >
+                {amount < 1 ? amount : `${amount}`}
+              </button>
+            ))}
           </div>
 
           {/* Letter, SOL, ASCII, Deploy Row */}
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 mt-3">
             <button 
               onClick={() => setSelectedPlatform("pump")}
-              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "pump" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "pump" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               LETTER
             </button>
             <button 
               onClick={() => setSelectedPlatform("bonk")}
-              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "bonk" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "bonk" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               SOL
             </button>
             <button 
               onClick={() => setSelectedPlatform("usd1")}
-              className={`flex-1 px-3 py-1.5 ${selectedPlatform === "usd1" ? "bg-green-600" : theme.buttonPrimary} ${theme.buttonPrimaryHover} ${theme.textPrimary} text-xs font-medium rounded-2xl border-2 ${theme.buttonBorder} transition-colors`}
+              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "usd1" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               ASCII
             </button>
             <button 
               onClick={handleDeploy}
               disabled={isDeploying}
-              className={`flex-1 px-3 py-1.5 ${isDeploying ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white text-xs font-bold rounded-2xl border-2 border-green-500 transition-colors flex items-center justify-center gap-1`}
+              className={`flex-[1.5] px-3 py-2.5 ${isDeploying ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'} text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5`}
             >
               {isDeploying ? (
                 <>
@@ -955,8 +940,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
                 </>
               ) : (
                 <>
-                  <span>🚀</span>
-                  <span>DEPLOY</span>
+                  <span>⚡</span>
+                  <span>Deploy (Enter)</span>
                 </>
               )}
             </button>
