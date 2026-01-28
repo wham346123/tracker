@@ -462,6 +462,97 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       document.removeEventListener('copy', handleCopy as EventListener);
     };
   }, [autoFillOnCopy, autoGenerateTicker, tweets]);
+
+  // Double-click to auto-fill - same logic as copy but triggered on double-click
+  useEffect(() => {
+    if (!autoFillOnCopy) return;
+    
+    const handleDoubleClick = () => {
+      // Small delay to let the browser select the word
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const text = selection?.toString();
+        
+        if (text && text.trim()) {
+          const trimmedText = text.trim();
+          console.log('👆👆 Double-click auto-fill:', trimmedText);
+          
+          // Set the name field
+          setName(trimmedText);
+          
+          // Auto-generate ticker if enabled
+          if (autoGenerateTicker) {
+            let ticker: string;
+            if (trimmedText.length <= 13) {
+              ticker = trimmedText.toUpperCase();
+            } else {
+              const words = trimmedText.split(/\s+/);
+              if (words.length > 1) {
+                ticker = words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
+              } else {
+                ticker = trimmedText.slice(0, 13).toUpperCase();
+              }
+            }
+            setSymbol(ticker);
+            console.log('🎫 Auto-generated ticker:', ticker);
+          }
+          
+          // Helper function to check if text exists in a tweet
+          const textMatchesTweet = (tweet: Tweet, searchText: string): boolean => {
+            const lowerSearch = searchText.toLowerCase();
+            if (tweet.text && tweet.text.toLowerCase().includes(lowerSearch)) return true;
+            if (tweet.quotedTweet?.text && tweet.quotedTweet.text.toLowerCase().includes(lowerSearch)) return true;
+            if (tweet.repliedToTweet?.text && tweet.repliedToTweet.text.toLowerCase().includes(lowerSearch)) return true;
+            return false;
+          };
+          
+          // Helper function to extract the best image
+          const getBestImage = (tweet: Tweet): string | undefined => {
+            let imageUrl = tweet.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+            if (imageUrl) return imageUrl;
+            if (tweet.imageUrl) return tweet.imageUrl;
+            imageUrl = tweet.quotedTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+            if (imageUrl) return imageUrl;
+            if (tweet.quotedTweet?.imageUrl) return tweet.quotedTweet.imageUrl;
+            imageUrl = tweet.repliedToTweet?.media?.find(m => m.type === 'image' || m.type === 'gif')?.url;
+            if (imageUrl) return imageUrl;
+            if (tweet.repliedToTweet?.imageUrl) return tweet.repliedToTweet.imageUrl;
+            if (tweet.profilePic) return tweet.profilePic;
+            return undefined;
+          };
+          
+          // Find the matching tweet
+          const matchingTweet = tweets.find(tweet => textMatchesTweet(tweet, trimmedText));
+          
+          if (matchingTweet) {
+            console.log('🐦 Found matching tweet:', matchingTweet.id);
+            
+            // Fill Twitter URL
+            const twitterUrl = matchingTweet.twitterStatusId 
+              ? `https://twitter.com/${matchingTweet.username}/status/${matchingTweet.twitterStatusId}`
+              : `https://twitter.com/${matchingTweet.username}`;
+            setTwitter(twitterUrl);
+            console.log('🔗 Auto-filled Twitter URL:', twitterUrl);
+            
+            // Fill Image
+            const imageUrl = getBestImage(matchingTweet);
+            if (imageUrl) {
+              setUploadedImage(imageUrl);
+              console.log('🖼️ Auto-filled image:', imageUrl);
+            }
+          } else {
+            console.log('⚠️ No matching tweet found for double-clicked text');
+          }
+        }
+      }, 10);
+    };
+    
+    document.addEventListener('dblclick', handleDoubleClick);
+    
+    return () => {
+      document.removeEventListener('dblclick', handleDoubleClick);
+    };
+  }, [autoFillOnCopy, autoGenerateTicker, tweets]);
   
   // Global Enter key handler for INSTANT deployment when Name and Ticker are filled
   useEffect(() => {
