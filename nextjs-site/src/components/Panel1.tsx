@@ -71,6 +71,8 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const [isDeploying, setIsDeploying] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<"pump" | "bonk" | "usd1">("pump");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [autoFillOnCopy, setAutoFillOnCopy] = useState(true);
+  const [autoGenerateTicker, setAutoGenerateTicker] = useState(true);
   
   const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
   const deploymentService = getDeploymentService();
@@ -331,6 +333,57 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     }
   }, [deployedTwitterUrl, onTwitterDeployed]);
   
+  // Auto-fill on copy - listen for clipboard copy events
+  useEffect(() => {
+    if (!autoFillOnCopy) return;
+    
+    const handleCopy = () => {
+      // Use setTimeout to let the clipboard update first
+      setTimeout(async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text && text.trim()) {
+            const trimmedText = text.trim();
+            console.log('📋 Auto-fill on copy:', trimmedText);
+            
+            // Set the name field
+            setName(trimmedText);
+            
+            // Auto-generate ticker if enabled
+            if (autoGenerateTicker) {
+              let ticker: string;
+              if (trimmedText.length <= 13) {
+                ticker = trimmedText.toUpperCase();
+              } else {
+                // Smart abbreviation for longer text
+                const words = trimmedText.split(/\s+/);
+                if (words.length > 1) {
+                  // Use first letter of each word
+                  ticker = words.map(w => w[0]).join('').toUpperCase().slice(0, 13);
+                } else {
+                  // Single long word - take first 13 chars
+                  ticker = trimmedText.slice(0, 13).toUpperCase();
+                }
+              }
+              setSymbol(ticker);
+              console.log('🎫 Auto-generated ticker:', ticker);
+            }
+          }
+        } catch (error) {
+          // Clipboard access might be denied
+          console.log('📋 Clipboard access denied or empty');
+        }
+      }, 50);
+    };
+    
+    // Listen for copy events
+    document.addEventListener('copy', handleCopy);
+    
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+    };
+  }, [autoFillOnCopy, autoGenerateTicker]);
+  
   // Global Enter key handler for INSTANT deployment when Name and Ticker are filled
   useEffect(() => {
     const handleGlobalEnter = (e: KeyboardEvent) => {
@@ -557,6 +610,31 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               onKeyDown={handleKeyDown}
               className={`w-full ${theme.inputBg} ${theme.textPrimary} px-3 py-2 rounded-lg border ${theme.inputBorder} text-sm focus:outline-none focus:border-slate-600 placeholder-gray-500`}
             />
+          </div>
+
+          {/* Auto-fill and Auto-generate Ticker Row */}
+          <div className="flex items-center gap-4 px-1">
+            {/* Auto-fill on copy checkbox */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoFillOnCopy}
+                onChange={(e) => setAutoFillOnCopy(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-slate-300 text-xs select-none">Auto-fill on copy</span>
+            </label>
+
+            {/* Auto-generate ticker checkbox */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoGenerateTicker}
+                onChange={(e) => setAutoGenerateTicker(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-slate-300 text-xs select-none">Auto-generate ticker</span>
+            </label>
           </div>
 
           {/* Website Field */}
