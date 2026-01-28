@@ -86,7 +86,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const [buyAmount, setBuyAmount] = useState(0.01);
   const [isDeploying, setIsDeploying] = useState(false);
   const [selectedPlatformIndex, setSelectedPlatformIndex] = useState(0); // Which platform icon is selected
-  const [selectedTickerMode, setSelectedTickerMode] = useState<"letter" | "sol" | "ascii">("letter");
+  const [selectedImageMode, setSelectedImageMode] = useState<"letter" | "sol" | "ascii">("letter");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [autoFillOnCopy, setAutoFillOnCopy] = useState(true);
   const [autoGenerateTicker, setAutoGenerateTicker] = useState(true);
@@ -212,11 +212,6 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       return;
     }
     
-    if (!uploadedImage) {
-      showToast("Please upload an image for your token!", "error");
-      return;
-    }
-    
     if (buyAmount <= 0) {
       showToast("Buy amount must be greater than 0!", "error");
       return;
@@ -225,6 +220,30 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     setIsDeploying(true);
     
     try {
+      // Generate image if none uploaded, using selected image mode
+      let imageToUse = uploadedImage;
+      if (!imageToUse) {
+        console.log(`🎨 Generating ${selectedImageMode} image for: ${symbol}`);
+        const imageTypeMap = {
+          'letter': 'Letter Image',
+          'sol': 'SOL ASCII (Gradient)',
+          'ascii': 'ASCII Art'
+        };
+        try {
+          imageToUse = await generatePresetImage(
+            imageTypeMap[selectedImageMode],
+            symbol.trim(),
+            undefined,
+            selectedPlatform === 'pump' ? 'Pump.fun' : undefined
+          );
+          console.log('✅ Image generated successfully!');
+        } catch (imgError) {
+          showToast(`Failed to generate image: ${imgError}`, "error");
+          setIsDeploying(false);
+          return;
+        }
+      }
+      
       await deploymentService.connect();
       
       deploymentService.createToken(
@@ -232,7 +251,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           platform: selectedPlatform,
           name: name.trim(),
           symbol: symbol.trim(),
-          image: uploadedImage,
+          image: imageToUse,
           amount: buyAmount,
           wallets: [activeWallet.compositeKey],
           website: website.trim() || undefined,
@@ -257,7 +276,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, website, twitter, deploymentService, showToast]);
+  }, [activeWallet, name, symbol, uploadedImage, buyAmount, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast]);
 
   // Deploy with a specific amount (for preset buttons) - doesn't change the default buyAmount
   const handleDeployWithAmount = useCallback(async (amount: number) => {
@@ -272,14 +291,33 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       return;
     }
     
-    if (!uploadedImage) {
-      showToast("Please upload an image for your token!", "error");
-      return;
-    }
-    
     setIsDeploying(true);
     
     try {
+      // Generate image if none uploaded, using selected image mode
+      let imageToUse = uploadedImage;
+      if (!imageToUse) {
+        console.log(`🎨 Generating ${selectedImageMode} image for: ${symbol}`);
+        const imageTypeMap = {
+          'letter': 'Letter Image',
+          'sol': 'SOL ASCII (Gradient)',
+          'ascii': 'ASCII Art'
+        };
+        try {
+          imageToUse = await generatePresetImage(
+            imageTypeMap[selectedImageMode],
+            symbol.trim(),
+            undefined,
+            selectedPlatform === 'pump' ? 'Pump.fun' : undefined
+          );
+          console.log('✅ Image generated successfully!');
+        } catch (imgError) {
+          showToast(`Failed to generate image: ${imgError}`, "error");
+          setIsDeploying(false);
+          return;
+        }
+      }
+      
       await deploymentService.connect();
       
       deploymentService.createToken(
@@ -287,7 +325,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           platform: selectedPlatform,
           name: name.trim(),
           symbol: symbol.trim(),
-          image: uploadedImage,
+          image: imageToUse,
           amount: amount, // Use the passed amount, not buyAmount state
           wallets: [activeWallet.compositeKey],
           website: website.trim() || undefined,
@@ -309,7 +347,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
       showToast(`Failed to connect to Token API: ${error}`, "error");
       setIsDeploying(false);
     }
-  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, website, twitter, deploymentService, showToast]);
+  }, [activeWallet, name, symbol, uploadedImage, selectedPlatform, selectedImageMode, website, twitter, deploymentService, showToast]);
   
   // Handle Enter key to deploy
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1040,20 +1078,23 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
           {/* Letter, SOL, ASCII, Deploy Row */}
           <div className="flex gap-1.5 mt-3">
             <button 
-              onClick={() => setSelectedTickerMode("letter")}
-              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "letter" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedImageMode("letter")}
+              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "letter" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              title="Generate letter image for deployment"
             >
               LETTER
             </button>
             <button 
-              onClick={() => setSelectedTickerMode("sol")}
-              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "sol" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedImageMode("sol")}
+              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "sol" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              title="Generate Solana gradient text image"
             >
               SOL
             </button>
             <button 
-              onClick={() => setSelectedTickerMode("ascii")}
-              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "ascii" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedImageMode("ascii")}
+              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "ascii" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              title="Generate ASCII art image"
             >
               ASCII
             </button>
