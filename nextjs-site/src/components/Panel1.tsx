@@ -85,12 +85,31 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const [isDragging, setIsDragging] = useState(false);
   const [buyAmount, setBuyAmount] = useState(0.01);
   const [isDeploying, setIsDeploying] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState<"pump" | "bonk" | "usd1">("pump");
+  const [selectedPlatformIndex, setSelectedPlatformIndex] = useState(0); // Which platform icon is selected
+  const [selectedTickerMode, setSelectedTickerMode] = useState<"letter" | "sol" | "ascii">("letter");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [autoFillOnCopy, setAutoFillOnCopy] = useState(true);
   const [autoGenerateTicker, setAutoGenerateTicker] = useState(true);
+  const [presetAmounts, setPresetAmounts] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [isEditingPresets, setIsEditingPresets] = useState(false);
+  const [tempPresets, setTempPresets] = useState<string[]>(['1', '2', '3', '4', '5']);
   
   const platformNames = ["pump", "bonk", "usd1", "bags", "bnb", "jupiter"];
+  
+  // Map platform index to deployment platform type
+  const getPlatformType = (index: number): "pump" | "bonk" | "usd1" => {
+    const mapping: { [key: number]: "pump" | "bonk" | "usd1" } = {
+      0: "pump",   // Pump
+      1: "bonk",   // Raydium/Bonk
+      2: "usd1",   // USD1
+      3: "pump",   // Bags -> pump
+      4: "bonk",   // BNB -> bonk
+      5: "usd1",   // Jupiter -> usd1
+    };
+    return mapping[index] || "pump";
+  };
+  
+  const selectedPlatform = getPlatformType(selectedPlatformIndex);
   const deploymentService = getDeploymentService();
   
   // Toast helper functions - wrapped in useCallback
@@ -320,6 +339,22 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
     }
   };
   
+  // Load preset amounts from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('deployPresetAmounts');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 5) {
+          setPresetAmounts(parsed);
+          setTempPresets(parsed.map(String));
+        }
+      } catch (e) {
+        console.log('Failed to load preset amounts');
+      }
+    }
+  }, []);
+
   // Handle clear trigger - silently clear all fields (no toast, buy amount persists)
   useEffect(() => {
     if (clearTrigger && clearTrigger > 0) {
@@ -859,9 +894,9 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               {logos.map((logo, i) => (
                 <button
                   key={i}
-                  onClick={() => setSelectedPlatform(platformNames[i] as "pump" | "bonk" | "usd1")}
+                  onClick={() => setSelectedPlatformIndex(i)}
                   className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all overflow-hidden ${
-                    selectedPlatform === platformNames[i] 
+                    selectedPlatformIndex === i 
                       ? 'border-green-500 bg-green-900/30 ring-2 ring-green-500/50' 
                       : 'border-slate-600 bg-slate-800 hover:border-slate-500'
                   }`}
@@ -891,40 +926,83 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
             />
           </div>
 
-          {/* Preset Amount Buttons */}
+          {/* Preset Amount Buttons with Config */}
           <div className="flex gap-1.5 mt-2">
-            {[0.0001, 2, 3, 5, 10].map((amount) => (
-              <button
-                key={amount}
-                onClick={() => setBuyAmount(amount)}
-                className={`flex-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  buyAmount === amount
-                    ? 'bg-purple-600 border-purple-500 text-white'
-                    : 'bg-slate-800 border-slate-600 text-gray-300 hover:border-slate-500 hover:bg-slate-700'
-                }`}
-              >
-                {amount < 1 ? amount : `${amount}`}
-              </button>
-            ))}
+            {isEditingPresets ? (
+              <>
+                {tempPresets.map((val, i) => (
+                  <input
+                    key={i}
+                    type="text"
+                    value={val}
+                    onChange={(e) => {
+                      const newPresets = [...tempPresets];
+                      newPresets[i] = e.target.value;
+                      setTempPresets(newPresets);
+                    }}
+                    className="flex-1 px-1 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white text-xs font-medium text-center focus:outline-none focus:border-blue-500 w-0 min-w-0"
+                  />
+                ))}
+                <button
+                  onClick={() => {
+                    const parsed = tempPresets.map(v => parseFloat(v) || 0).filter(v => v > 0);
+                    if (parsed.length === 5) {
+                      setPresetAmounts(parsed);
+                      localStorage.setItem('deployPresetAmounts', JSON.stringify(parsed));
+                    }
+                    setIsEditingPresets(false);
+                  }}
+                  className="px-2 py-2 rounded-lg border border-green-600 bg-green-600 text-white text-xs font-medium"
+                >
+                  ✓
+                </button>
+              </>
+            ) : (
+              <>
+                {presetAmounts.map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => {
+                      setBuyAmount(amount);
+                      // Instant deploy after setting amount
+                      setTimeout(() => handleDeploy(), 50);
+                    }}
+                    className="flex-1 px-2 py-2 rounded-lg border text-xs font-medium transition-all bg-slate-800 border-slate-600 text-gray-300 hover:border-purple-500 hover:bg-purple-600 hover:text-white"
+                  >
+                    {amount < 1 ? amount : amount}
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    setTempPresets(presetAmounts.map(String));
+                    setIsEditingPresets(true);
+                  }}
+                  className="px-2 py-2 rounded-lg border border-slate-600 bg-slate-800 text-gray-400 text-xs hover:bg-slate-700 hover:text-white"
+                  title="Edit preset amounts"
+                >
+                  ⚙️
+                </button>
+              </>
+            )}
           </div>
 
           {/* Letter, SOL, ASCII, Deploy Row */}
           <div className="flex gap-1.5 mt-3">
             <button 
-              onClick={() => setSelectedPlatform("pump")}
-              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "pump" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedTickerMode("letter")}
+              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "letter" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               LETTER
             </button>
             <button 
-              onClick={() => setSelectedPlatform("bonk")}
-              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "bonk" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedTickerMode("sol")}
+              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "sol" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               SOL
             </button>
             <button 
-              onClick={() => setSelectedPlatform("usd1")}
-              className={`flex-1 px-3 py-2.5 ${selectedPlatform === "usd1" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
+              onClick={() => setSelectedTickerMode("ascii")}
+              className={`flex-1 px-3 py-2.5 ${selectedTickerMode === "ascii" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
             >
               ASCII
             </button>
