@@ -14,12 +14,17 @@ export default function GenerateLettersPage() {
       canvas.height = 1000;
       const ctx = canvas.getContext('2d')!;
       
-      // Background color based on type
-      ctx.fillStyle = color === 'green' ? '#22C55E' : '#D4A034';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Colors - green for Pump, warm gold for Bonk (matching reference)
+      const bgColor = color === 'green' ? '#22C55E' : '#E5A92E';
       
-      // Configure text - thicker, bolder style matching reference
-      ctx.font = '900 700px "Arial Black", "Helvetica Neue", Arial, sans-serif';
+      // Draw circular background
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(500, 500, 500, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Configure text - clean rounded style
+      ctx.font = '800 580px "Arial Rounded MT Bold", "Helvetica Neue", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
@@ -27,32 +32,28 @@ export default function GenerateLettersPage() {
       const x = 500;
       const y = 520;
       
-      // Draw multiple strokes for thicker outline effect (matching reference style)
+      // Draw white outline with hollow center effect
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.miterLimit = 2;
       
-      // Outer stroke (thickest)
-      ctx.lineWidth = 35;
-      ctx.strokeText(char, x, y);
-      
-      // Middle stroke
-      ctx.lineWidth = 28;
-      ctx.strokeText(char, x, y);
-      
-      // Inner stroke (creates the clean outline look)
-      ctx.lineWidth = 22;
+      // Thick white stroke
+      ctx.lineWidth = 45;
       ctx.strokeText(char, x, y);
       
       // Fill with background color to create hollow effect
-      ctx.fillStyle = color === 'green' ? '#22C55E' : '#D4A034';
+      ctx.fillStyle = bgColor;
       ctx.fillText(char, x, y);
       
-      // Final white outline
+      // Clean white outline on top
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 18;
+      ctx.lineWidth = 25;
       ctx.strokeText(char, x, y);
+      
+      // Fill again to ensure clean hollow
+      ctx.fillStyle = bgColor;
+      ctx.fillText(char, x, y);
       
       canvas.toBlob((blob) => {
         resolve(blob!);
@@ -150,7 +151,7 @@ export default function GenerateLettersPage() {
           <button
             key={letter}
             onClick={() => generateSinglePreview(letter, 'green')}
-            className="w-12 h-12 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-xl transition-transform hover:scale-110"
+            className="w-12 h-12 bg-[#22C55E] hover:bg-[#1ea34d] rounded-full font-bold text-xl transition-transform hover:scale-110"
           >
             {letter.toUpperCase()}
           </button>
@@ -163,7 +164,7 @@ export default function GenerateLettersPage() {
           <button
             key={`gold-${letter}`}
             onClick={() => generateSinglePreview(letter, 'gold')}
-            className="w-12 h-12 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-bold text-xl transition-transform hover:scale-110"
+            className="w-12 h-12 bg-[#E5A92E] hover:bg-[#d4991f] rounded-full font-bold text-xl transition-transform hover:scale-110"
           >
             {letter.toUpperCase()}
           </button>

@@ -160,7 +160,7 @@ export async function generateLetterImage(letter: string, isPump: boolean): Prom
   // Get the first letter
   const char = (letter.toUpperCase()[0] || 'A').toLowerCase();
   
-  // Netlify hosted images - files are at root level
+  // Netlify hosted images - circular style, files are at root level
   // Green for Pump.fun, Gold for Bonk/others
   const baseUrl = 'https://incredible-platypus-eab90a.netlify.app';
   const suffix = isPump ? '' : '_gold';
