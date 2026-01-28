@@ -82,7 +82,7 @@ const EmbeddedTweet = ({ tweet }: { tweet: Tweet }) => (
       </div>
     </div>
     
-    <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap break-words mb-2">
+    <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap select-text break-words mb-2">
       {tweet.text}
     </p>
     
