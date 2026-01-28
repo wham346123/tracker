@@ -104,15 +104,16 @@ export default function ResizablePanels() {
   // Store button configurations with individual positions and sizes (locked in place)
   const [buttons] = useState<ButtonConfig[]>([
     { id: 1, x: 15, y: 15, width: 90, height: 45, label: "Home" },
-    { id: 10, x: 125, y: 15, width: 80, height: 45, label: "Saved" },
-    { id: 11, x: 215, y: 15, width: 90, height: 45, label: "Google" },
-    { id: 2, x: 315, y: 15, width: 80, height: 45, label: "Filters" },
-    { id: 3, x: 405, y: 15, width: 60, height: 45, label: "Settings" },
-    { id: 5, x: 475, y: 15, width: 280, height: 45, label: "Site Chat" },
-    { id: 6, x: 765, y: 15, width: 100, height: 45, label: "People" },
-    { id: 7, x: 875, y: 15, width: 120, height: 45, label: "VAMP" },
-    { id: 12, x: 1005, y: 15, width: 110, height: 45, label: "Deploy" },
-    { id: 9, x: 1125, y: 15, width: 100, height: 45, label: "Button 9" },
+    { id: 13, x: 115, y: 15, width: 70, height: 45, label: "Test" }, // Test Mode toggle
+    { id: 10, x: 195, y: 15, width: 80, height: 45, label: "Saved" },
+    { id: 11, x: 285, y: 15, width: 90, height: 45, label: "Google" },
+    { id: 2, x: 385, y: 15, width: 80, height: 45, label: "Filters" },
+    { id: 3, x: 475, y: 15, width: 60, height: 45, label: "Settings" },
+    { id: 5, x: 545, y: 15, width: 260, height: 45, label: "Site Chat" },
+    { id: 6, x: 815, y: 15, width: 100, height: 45, label: "People" },
+    { id: 7, x: 925, y: 15, width: 120, height: 45, label: "VAMP" },
+    { id: 12, x: 1055, y: 15, width: 110, height: 45, label: "Deploy" },
+    { id: 9, x: 1175, y: 15, width: 100, height: 45, label: "Button 9" },
   ]);
   
   const [isDragging, setIsDragging] = useState<{ type: string; id?: number } | null>(null);
@@ -133,6 +134,7 @@ export default function ResizablePanels() {
   const [deployedImageUrl, setDeployedImageUrl] = useState<string | null>(null);
   const [deployedTwitterUrl, setDeployedTwitterUrl] = useState<string | null>(null);
   const [clearTrigger, setClearTrigger] = useState<number>(0); // Trigger to clear Panel1
+  const [testMode, setTestMode] = useState(false); // Test mode for preview without deploying
   
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -1028,9 +1030,26 @@ export default function ResizablePanels() {
                 <input type="text" placeholder="Paste Twitter URL here..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={handleChatSubmit}
                   className="w-full h-full bg-slate-700 hover:bg-slate-600 text-white px-3 text-xs rounded-xl border-2 border-slate-500 focus:outline-none focus:border-slate-400 placeholder-gray-400" />
               ) : (
-                <button onClick={() => { if (button.id === 3) setIsSettingsOpen(true); if (button.id === 9) setIsDeploySettingsOpen(true); }}
-                  className={`w-full h-full ${button.id === 12 ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-medium flex items-center justify-center gap-1.5 rounded-xl border-2 ${button.id === 12 ? 'border-green-500' : 'border-slate-500'} shadow-md transition-all hover:shadow-lg ${button.id === 12 ? 'hover:border-green-400' : 'hover:border-slate-400'} cursor-pointer`}>
+                <button onClick={() => { 
+                  if (button.id === 3) setIsSettingsOpen(true); 
+                  if (button.id === 9) setIsDeploySettingsOpen(true);
+                  if (button.id === 13) setTestMode(!testMode);
+                }}
+                  className={`w-full h-full ${
+                    button.id === 12 ? 'bg-green-600 hover:bg-green-700' : 
+                    button.id === 13 ? (testMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-700 hover:bg-orange-600') :
+                    'bg-slate-700 hover:bg-slate-600'
+                  } text-white font-medium flex items-center justify-center gap-1.5 rounded-xl border-2 ${
+                    button.id === 12 ? 'border-green-500' : 
+                    button.id === 13 ? (testMode ? 'border-orange-400' : 'border-slate-500') :
+                    'border-slate-500'
+                  } shadow-md transition-all hover:shadow-lg ${
+                    button.id === 12 ? 'hover:border-green-400' : 
+                    button.id === 13 ? 'hover:border-orange-400' :
+                    'hover:border-slate-400'
+                  } cursor-pointer`}>
                   {button.id === 1 && <Home size={14} />}
+                  {button.id === 13 && <><span className="text-sm">{testMode ? '🧪' : '👁️'}</span><span className="text-xs font-medium">{testMode ? 'ON' : 'Test'}</span></>}
                   {button.id === 10 && <><span className="text-sm">💾</span><span className="text-xs">Saved</span></>}
                   {button.id === 11 && <><span className="text-sm">🔍</span><span className="text-xs">Google</span></>}
                   {button.id === 2 && <><Filter size={14} /><span className="text-xs">Filters</span></>}
@@ -1063,6 +1082,7 @@ export default function ResizablePanels() {
             onTwitterDeployed={() => setDeployedTwitterUrl(null)}
             clearTrigger={clearTrigger}
             tweets={tweets}
+            testMode={testMode}
           />
         </div>
 

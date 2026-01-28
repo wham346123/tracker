@@ -62,9 +62,10 @@ interface Panel1Props {
   onTwitterDeployed?: () => void;
   clearTrigger?: number; // When this changes, silently clear all fields
   tweets?: Tweet[]; // All tweets for auto-fill on copy
+  testMode?: boolean; // Test mode - shows preview instead of deploying
 }
 
-export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied, deployedImageUrl, deployedTwitterUrl, onImageDeployed, onTwitterDeployed, clearTrigger, tweets = [] }: Panel1Props) {
+export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetApplied, deployedImageUrl, deployedTwitterUrl, onImageDeployed, onTwitterDeployed, clearTrigger, tweets = [], testMode = false }: Panel1Props) {
   const theme = getTheme(themeId);
   
   const logos = [
@@ -93,7 +94,6 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
   const [presetAmounts, setPresetAmounts] = useState<number[]>([1, 2, 3, 4, 5]);
   const [isEditingPresets, setIsEditingPresets] = useState(false);
   const [tempPresets, setTempPresets] = useState<string[]>(['1', '2', '3', '4', '5']);
-  const [testMode, setTestMode] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<{
     name: string;
@@ -1004,17 +1004,6 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               />
               <span className="text-slate-300 text-xs select-none">Auto-generate ticker</span>
             </label>
-
-            {/* Test Mode checkbox */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={testMode}
-                onChange={(e) => setTestMode(e.target.checked)}
-                className="w-4 h-4 rounded border-orange-500 bg-slate-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer"
-              />
-              <span className={`text-xs select-none ${testMode ? 'text-orange-400 font-medium' : 'text-slate-300'}`}>Test Mode</span>
-            </label>
           </div>
 
           {/* Website Field */}
@@ -1160,26 +1149,42 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
             )}
           </div>
 
-          {/* Letter, SOL, ASCII, Deploy Row */}
+          {/* Letter, SOL, ASCII, Deploy Row - These buttons instant deploy with that image mode */}
           <div className="flex gap-1.5 mt-3">
             <button 
-              onClick={() => setSelectedImageMode("letter")}
-              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "letter" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
-              title="Generate letter image for deployment"
+              onClick={() => {
+                setSelectedImageMode("letter");
+                // Clear uploaded image to force generation, then deploy
+                setUploadedImage(null);
+                setTimeout(() => handleDeployWithAmount(buyAmount), 50);
+              }}
+              disabled={isDeploying}
+              className={`flex-1 px-3 py-2.5 ${isDeploying ? 'bg-gray-600' : 'bg-slate-800 border-slate-600 hover:bg-green-700 hover:border-green-600'} text-white text-xs font-medium rounded-lg border transition-colors`}
+              title="Instant deploy with letter image"
             >
               LETTER
             </button>
             <button 
-              onClick={() => setSelectedImageMode("sol")}
-              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "sol" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
-              title="Generate Solana gradient text image"
+              onClick={() => {
+                setSelectedImageMode("sol");
+                setUploadedImage(null);
+                setTimeout(() => handleDeployWithAmount(buyAmount), 50);
+              }}
+              disabled={isDeploying}
+              className={`flex-1 px-3 py-2.5 ${isDeploying ? 'bg-gray-600' : 'bg-slate-800 border-slate-600 hover:bg-purple-700 hover:border-purple-600'} text-white text-xs font-medium rounded-lg border transition-colors`}
+              title="Instant deploy with Solana gradient image"
             >
               SOL
             </button>
             <button 
-              onClick={() => setSelectedImageMode("ascii")}
-              className={`flex-1 px-3 py-2.5 ${selectedImageMode === "ascii" ? "bg-slate-700 border-slate-500" : "bg-slate-800 border-slate-600"} text-white text-xs font-medium rounded-lg border transition-colors hover:bg-slate-700`}
-              title="Generate ASCII art image"
+              onClick={() => {
+                setSelectedImageMode("ascii");
+                setUploadedImage(null);
+                setTimeout(() => handleDeployWithAmount(buyAmount), 50);
+              }}
+              disabled={isDeploying}
+              className={`flex-1 px-3 py-2.5 ${isDeploying ? 'bg-gray-600' : 'bg-slate-800 border-slate-600 hover:bg-cyan-700 hover:border-cyan-600'} text-white text-xs font-medium rounded-lg border transition-colors`}
+              title="Instant deploy with ASCII art image"
             >
               ASCII
             </button>
@@ -1196,7 +1201,7 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
               ) : (
                 <>
                   <span>{testMode ? '👁️' : '⚡'}</span>
-                  <span>{testMode ? 'Preview' : 'Deploy (Enter)'}</span>
+                  <span>{testMode ? 'Preview' : 'Deploy'}</span>
                 </>
               )}
             </button>
@@ -1274,22 +1279,12 @@ export default function Panel1({ themeId, activeWallet, presetTrigger, onPresetA
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 bg-gray-800 flex gap-3">
+            <div className="px-6 py-4 bg-gray-800">
               <button
                 onClick={() => setShowPreview(false)}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
               >
                 Close Preview
-              </button>
-              <button
-                onClick={() => {
-                  setTestMode(false);
-                  setShowPreview(false);
-                  showToast("Test Mode disabled. Ready to deploy for real!", "info");
-                }}
-                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-bold transition-all"
-              >
-                ⚡ Deploy for Real
               </button>
             </div>
           </div>
