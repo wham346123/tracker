@@ -42,7 +42,6 @@ interface Tweet {
   platform?: 'twitter' | 'truthsocial' | 'x';
   media?: Array<{ type: 'image' | 'video' | 'gif'; url: string }>;
   originalAuthorHandle?: string;
-  replyToHandle?: string; // Handle of the user being replied to (even without full content)
   quotedTweet?: Tweet;
   repliedToTweet?: Tweet;
   linkPreviews?: Array<{
@@ -243,19 +242,8 @@ export default function ResizablePanels() {
     const imageUrl = media.find(m => m.type === 'image')?.url;
     const timestamp = j7Tweet.createdAt ? new Date(j7Tweet.createdAt).toISOString() : new Date().toISOString();
     
-    // Extract reply information - replyTo is just a reference (id, handle), repliedQuote has the full tweet
-    const replyToRef = j7Tweet.replyTo || j7Tweet.repliedTo || null;
-    // The ACTUAL replied-to tweet content is in repliedQuote, not replyTo!
-    const replyTo = j7Tweet.repliedQuote || j7Tweet.parentTweet || j7Tweet.parent || replyToRef;
-    
-    // Debug: Log reply structure
-    if (j7Tweet.isReply || replyTo) {
-      console.log('🔴 repliedQuote exists:', !!j7Tweet.repliedQuote);
-      console.log('🔴 repliedQuote keys:', j7Tweet.repliedQuote ? Object.keys(j7Tweet.repliedQuote) : 'N/A');
-      if (j7Tweet.repliedQuote) {
-        console.log('🔴 repliedQuote.text:', j7Tweet.repliedQuote.text);
-      }
-    }
+    // Extract reply information
+    const replyTo = j7Tweet.replyTo || j7Tweet.repliedTo || null;
     
     // Extract quoted tweet (for quote tweets/retweets)
     let quotedTweet: Tweet | undefined;
@@ -380,11 +368,6 @@ export default function ResizablePanels() {
                            rtUsername;
       
       // ULTRA COMPREHENSIVE text extraction - check EVERY possible field
-      // Log all available keys to help debug
-      console.log('🔑 All rt keys:', Object.keys(rt));
-      console.log('🔑 rt.tweet keys:', rt.tweet ? Object.keys(rt.tweet) : 'no tweet object');
-      console.log('🔑 rt.data keys:', rt.data ? Object.keys(rt.data) : 'no data object');
-      
       const rtText = rt.text || 
                      rt.fullText || 
                      rt.full_text ||
@@ -395,25 +378,11 @@ export default function ResizablePanels() {
                      rt.tweet?.text ||
                      rt.tweet?.fullText ||
                      rt.tweet?.full_text ||
-                     rt.tweet?.content ||
                      rt.status?.text ||
                      rt.status?.full_text ||
-                     rt.data?.text ||
-                     rt.data?.fullText ||
-                     rt.data?.full_text ||
-                     rt.originalTweet?.text ||
-                     rt.original?.text ||
-                     rt.note?.text ||
-                     rt.post?.text ||
-                     rt.post?.content ||
-                     // Sometimes the text might be directly a string value in a weird key
-                     (typeof rt === 'string' ? rt : '') ||
                      '';
       
       console.log('📝 Extracted text:', rtText);
-      console.log('📝 Raw rt.text value:', rt.text);
-      console.log('📝 Raw rt.fullText value:', rt.fullText);
-      console.log('📝 Raw rt.content value:', rt.content);
       
       // COMPREHENSIVE profile pic extraction - check EVERYTHING
       const rtProfilePic = rt.author?.avatar || 
@@ -432,25 +401,20 @@ export default function ResizablePanels() {
                           rt.profileImageUrl ||
                           '';
       
-      // Only create repliedToTweet if we have actual content (text or media)
-      // If we only have a reference (id, handle), don't show the embedded tweet box
-      if (rtText || rtMedia.length > 0) {
-        repliedToTweet = {
-          id: rt.id || rt.tweetId || rt.tweet_id || 'replied',
-          username: rtUsername,
-          displayName: rtDisplayName,
-          handle: `@${rtUsername}`,
-          verified: rt.author?.verified || rt.user?.verified || rt.verified || false,
-          timestamp: rt.createdAt || rt.created_at || rt.timestamp ? new Date(rt.createdAt || rt.created_at || rt.timestamp).toISOString() : timestamp,
-          text: rtText,
-          profilePic: rtProfilePic,
-          highlightColor: undefined,
-          media: rtMedia.length > 0 ? rtMedia : undefined,
-        };
-        console.log('✅ Converted replied-to tweet with content:', repliedToTweet);
-      } else {
-        console.log('⚠️ Replied-to tweet has no content, skipping embedded box. Handle:', rtUsername);
-      }
+      repliedToTweet = {
+        id: rt.id || rt.tweetId || rt.tweet_id || 'replied',
+        username: rtUsername,
+        displayName: rtDisplayName,
+        handle: `@${rtUsername}`,
+        verified: rt.author?.verified || rt.user?.verified || rt.verified || false,
+        timestamp: rt.createdAt || rt.created_at || rt.timestamp ? new Date(rt.createdAt || rt.created_at || rt.timestamp).toISOString() : timestamp,
+        text: rtText || 'No text available',
+        profilePic: rtProfilePic,
+        highlightColor: undefined,
+        media: rtMedia.length > 0 ? rtMedia : undefined,
+      };
+      
+      console.log('✅ Converted replied-to tweet:', repliedToTweet);
     }
     
     // Extract link previews
@@ -489,9 +453,6 @@ export default function ResizablePanels() {
       };
     }
     
-    // Get the reply-to handle from the reference (even if we don't have full content)
-    const replyToHandle = replyToRef?.handle || replyToRef?.username || repliedToTweet?.username;
-    
     const newTweet: Tweet = {
       id: `j7-${Date.now()}-${Math.random()}`,
       twitterStatusId: j7Tweet.id || j7Tweet.tweetId || j7Tweet.statusId, // Store actual Twitter status ID
@@ -505,12 +466,11 @@ export default function ResizablePanels() {
       profilePic,
       highlightColor: customNotif?.color,
       isRetweet: j7Tweet.isRetweet || j7Tweet.type === 'RETWEET' || false,
-      isReply: j7Tweet.isReply || replyTo !== null || replyToRef !== null || false,
+      isReply: j7Tweet.isReply || replyTo !== null || false,
       isQuote: j7Tweet.isQuote || j7Tweet.quotedTweet !== null || false,
       tweetType: j7Tweet.type,
       media: undefined, // Media goes in the retweetedTweet for retweets
       originalAuthorHandle: j7Tweet.isRetweet && retweetOriginalAuthor?.handle ? `@${retweetOriginalAuthor.handle}` : undefined,
-      replyToHandle: replyToHandle ? `@${replyToHandle}` : undefined, // Store handle even without full content
       quotedTweet: retweetedTweet || quotedTweet, // Use retweetedTweet for retweets, quotedTweet for quotes
       repliedToTweet,
       linkPreviews: linkPreviews.length > 0 ? linkPreviews : undefined,

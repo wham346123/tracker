@@ -21,7 +21,6 @@ interface Tweet {
   tweetType?: string;
   media?: Array<{ type: 'image' | 'video' | 'gif'; url: string }>;
   originalAuthorHandle?: string;
-  replyToHandle?: string; // Handle of the user being replied to (even without full content)
   quotedTweet?: Tweet;
   repliedToTweet?: Tweet;
   linkPreviews?: Array<{
@@ -276,20 +275,13 @@ export default function Panel3({ themeId, tweets, customNotifications, defaultCo
                 </p>
                 
                 {/* Show Replied-To Tweet BELOW main text (for replies) */}
-                {tweet.repliedToTweet ? (
+                {tweet.repliedToTweet && (
                   <div className="mt-3">
                     <div className="text-gray-400 text-xs mb-2 flex items-center gap-1">
                       <span>Replying to</span>
                       <span className="text-blue-400">{tweet.repliedToTweet.handle}</span>
                     </div>
                     <EmbeddedTweet tweet={tweet.repliedToTweet} />
-                  </div>
-                ) : tweet.replyToHandle && (
-                  <div className="mt-3">
-                    <div className="text-gray-400 text-xs flex items-center gap-1">
-                      <span>Replying to</span>
-                      <span className="text-blue-400">{tweet.replyToHandle}</span>
-                    </div>
                   </div>
                 )}
                 
